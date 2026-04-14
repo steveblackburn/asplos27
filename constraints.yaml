@@ -1,0 +1,18 @@
+# Reviewer Assignment Constraints
+
+# Target number of reviews per paper
+reviews_per_paper: 22
+
+# Maximum number of External Review Committee (ERC) reviewers per paper
+max_erc_reviews_per_paper: 7
+
+# Minimum number of senior reviewers per paper
+min_senior_reviewers_per_paper: 1
+
+# Ad hoc maximum review counts for specific reviewers
+# Format:
+#   reviewer_email: max_count
+reviewer_limits:
+  david.black-schaffer@it.uu.se: 2
+  nandita@cs.toronto.edu: 4
+  neil.zhao@utexas.edu: 3
