@@ -104,14 +104,14 @@ def main():
                 
                 if topics:
                     avg = sum_score / len(topics)
-                    score = avg * 25
+                    score = avg / 4.0
                 else:
-                    score = 0
+                    score = 0.0
 
             results.append({
                 'paper': paper,
                 'reviewer': email,
-                'score': round(score, 2)  # Round to 2 decimal places
+                'score': round(score, 4)  # Round to 4 decimal places
             })
 
     # 5. Write output
