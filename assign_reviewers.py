@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--output", default="data/assignments.csv", help="Output CSV file")
     parser.add_argument("--tpms-scores", default="data/from-tpms/tpms-mock.csv", help="TPMS scores CSV (no header)")
     parser.add_argument("--topic-scores", default="data/paper_reviewer_topic_scores.csv", help="Topic scores CSV")
+    parser.add_argument("--objective", default="max_relative", choices=["max_total", "max_relative"], help="Objective function: max_total (maximize total score), max_relative (maximize fraction of optimal unconstrained score)")
     args = parser.parse_args()
 
     prefix = args.prefix
@@ -133,6 +134,16 @@ def main():
         print(f"Warning: Topic scores file not found: {topic_scores_file}")
     print(f"Valid pairs: {len(valid_pairs)} (after filtering for eligible reviewers and non-zero scores)")
 
+    # Calculate unconstrained optimal scores for all papers
+    optimal_scores = {}
+    for paper in papers:
+        all_paper_scores = [scores.get((paper, r), 0.0) for r in reviewers if (paper, r) in valid_pairs]
+        all_paper_scores.sort(reverse=True)
+        top_n_scores = all_paper_scores[:reviews_per_paper]
+        optimal_scores[paper] = sum(top_n_scores) if top_n_scores else 1.0
+        if optimal_scores[paper] == 0:
+            optimal_scores[paper] = 1.0
+
     # 5. Setup Solver
     # Use SCIP as it is a good general purpose MIP solver included in OR-Tools
     solver = pywraplp.Solver.CreateSolver('SCIP')
@@ -147,10 +158,17 @@ def main():
             if (paper, reviewer) in valid_pairs:
                 x[(paper, reviewer)] = solver.BoolVar(f'x_{paper}_{reviewer}')
 
-    # Objective: Maximize total score
+    # Objective
     objective = solver.Objective()
-    for (paper, reviewer), var in x.items():
-        objective.SetCoefficient(var, scores[(paper, reviewer)])
+    if args.objective == "max_relative":
+        print("Objective: Maximize relative score (fraction of optimal)")
+        for (paper, reviewer), var in x.items():
+            coeff = scores[(paper, reviewer)] / optimal_scores[paper]
+            objective.SetCoefficient(var, coeff)
+    else:
+        print("Objective: Maximize total score")
+        for (paper, reviewer), var in x.items():
+            objective.SetCoefficient(var, scores[(paper, reviewer)])
     objective.SetMaximization()
 
     # Constraints
@@ -205,7 +223,8 @@ def main():
     status = solver.Solve()
 
     if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
-        print(f"Solution found! Status: {status}")
+        status_str = "OPTIMAL" if status == pywraplp.Solver.OPTIMAL else "FEASIBLE"
+        print(f"Solution found! Status: {status_str}")
         print(f"Total score: {solver.Objective().Value()}")
 
         # Write output
@@ -272,6 +291,10 @@ def main():
             
         # Sort by actual score ascending (worst to best)
         stats_rows.sort(key=lambda x: x[1])
+        
+        # Calculate average relative score
+        avg_relative_score = sum(row[3] for row in stats_rows) / len(stats_rows) if stats_rows else 0
+        print(f"Average relative score: {avg_relative_score:.4f}")
         
         with open(stats_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
