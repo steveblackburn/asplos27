@@ -14,30 +14,59 @@ def calculate_percentile(scores, percentile):
     return scores_sorted[index]
 
 def main():
-    parser = argparse.ArgumentParser(description="Analyze combined review scores.")
-    parser.add_argument("--input", default="data/paper_reviewer_combined_scores.csv", help="Input CSV file")
-    parser.add_argument("--output", default="data/paper_stats.csv", help="Output CSV file")
+    parser = argparse.ArgumentParser(description="Filter review scores for PC and VC members.")
+    parser.add_argument("--input", default="data/paper-reviewer-combined-scores.csv", help="Input CSV file")
+    parser.add_argument("--pc-info", default="data/from-hotcrp/asplos27-apr-pcinfo.csv", help="PC info CSV from HotCRP")
+    parser.add_argument("--output-pc", default="data/paper-stats-pc.csv", help="Output CSV file for PC/ERC scores")
+    parser.add_argument("--output-vc", default="data/paper-stats-vc.csv", help="Output CSV file for VC scores")
     args = parser.parse_args()
 
     input_file = args.input
-    output_file = args.output
+    pcinfo_file = args.pc_info
+    output_pc_file = args.output_pc
+    output_vc_file = args.output_vc
+
+    # Load PC info
+    pc_reviewers = set()
+    vc_reviewers = set()
+    
+    print(f"Reading PC info from {pcinfo_file}")
+    try:
+        with open(pcinfo_file, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                email = row['email']
+                tags = row.get('tags', '')
+                if 'pc-full' in tags or 'erc' in tags:
+                    pc_reviewers.add(email)
+                if 'vc' in tags:
+                    vc_reviewers.add(email)
+    except FileNotFoundError:
+        print(f"Error: PC info file not found: {pcinfo_file}")
+        return
 
     print(f"Reading scores from {input_file}")
 
     all_scores = []
-    paper_scores = collections.defaultdict(list)
+    pc_scores = collections.defaultdict(list)
+    vc_scores = collections.defaultdict(list)
 
     try:
         with open(input_file, 'r', newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 paper = row['paper']
+                reviewer = row['reviewer']
                 score = float(row['score'])
 
                 if score > 0:
                     all_scores.append(score)
-
-                paper_scores[paper].append(score)
+                    
+                    if reviewer in pc_reviewers:
+                        pc_scores[paper].append(score)
+                    if reviewer in vc_reviewers:
+                        vc_scores[paper].append(score)
+                        
     except FileNotFoundError:
         print(f"Error: Input file not found: {input_file}")
         return
@@ -45,7 +74,7 @@ def main():
         print(f"Error: Missing expected column in input file: {e}")
         return
 
-    # 1. Calculate and print percentiles
+    # Calculate and print percentiles on all non-zero scores
     if all_scores:
         p90 = calculate_percentile(all_scores, 0.90)
         p95 = calculate_percentile(all_scores, 0.95)
@@ -55,33 +84,46 @@ def main():
     else:
         print("No non-zero scores found to calculate percentiles.")
 
-    # 2. Process per-paper scores and write CSV
-    results = []
-    sorted_papers = sorted(list(paper_scores.keys()), key=int)
+    # Process PC scores
+    results_pc = []
+    sorted_papers_pc = sorted(list(pc_scores.keys()), key=int)
+    for paper in sorted_papers_pc:
+        scores = pc_scores[paper]
+        scores.sort(reverse=True)
+        results_pc.append([paper] + [int(s) for s in scores])
 
-    for paper in sorted_papers:
-        scores = paper_scores[paper]
-        # Filter non-zero
-        non_zero_scores = [s for s in scores if s > 0]
-        # Sort descending
-        non_zero_scores.sort(reverse=True)
+    # Process VC scores
+    results_vc = []
+    sorted_papers_vc = sorted(list(vc_scores.keys()), key=int)
+    for paper in sorted_papers_vc:
+        scores = vc_scores[paper]
+        scores.sort(reverse=True)
+        results_vc.append([paper] + [int(s) for s in scores])
 
-        # Construct row: paper, score1, score2, ...
-        # Convert to int for output since combined scores were rounded to integers
-        row_data = [paper] + [int(s) for s in non_zero_scores]
-        results.append(row_data)
-
-    output_dir = os.path.dirname(output_file)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-
-    print(f"Writing paper stats to {output_file}")
-    with open(output_file, 'w', newline='', encoding='utf-8') as f:
+    # Write PC scores
+    pc_dir = os.path.dirname(output_pc_file)
+    if pc_dir and not os.path.exists(pc_dir):
+        os.makedirs(pc_dir, exist_ok=True)
+    print(f"Writing PC scores to {output_pc_file}")
+    with open(output_pc_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         # No header as planned
-        writer.writerows(results)
+        writer.writerows(results_pc)
+
+    # Write VC scores
+    vc_dir = os.path.dirname(output_vc_file)
+    if vc_dir and not os.path.exists(vc_dir):
+        os.makedirs(vc_dir, exist_ok=True)
+    print(f"Writing VC scores to {output_vc_file}")
+    with open(output_vc_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        # No header as planned
+        writer.writerows(results_vc)
 
     print("Done.")
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()

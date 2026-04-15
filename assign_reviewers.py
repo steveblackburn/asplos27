@@ -7,15 +7,18 @@ import yaml
 def main():
     parser = argparse.ArgumentParser(description="Assign reviewers to papers using OR-Tools.")
     parser.add_argument("--prefix", default="asplos27-apr", help="Conference prefix")
-    parser.add_argument("--scores", default="data/paper_reviewer_combined_scores.csv", help="Combined scores CSV")
+    parser.add_argument("--scores", default="data/paper-reviewer-combined-scores.csv", help="Combined scores CSV")
+    parser.add_argument("--stats-file", default="data/paper-stats-pc.csv", help="PC paper stats CSV (scores list)")
+    parser.add_argument("--stats-file-vc", default="data/paper-stats-vc.csv", help="VC paper stats CSV (scores list)")
     parser.add_argument("--constraints", default="constraints.yaml", help="Constraints YAML file")
-    parser.add_argument("--demographics", default="data/pc_demographics.csv", help="PC demographics CSV")
+    parser.add_argument("--demographics", default="data/pc-demographics.csv", help="PC demographics CSV")
     parser.add_argument("--pcinfo", default="data/from-hotcrp/asplos27-apr-pcinfo.csv", help="PC info CSV")
-    parser.add_argument("--output", default="data/assignments.csv", help="Output CSV file")
+    parser.add_argument("--output", default="data/pc-assignments.csv", help="Output CSV file")
     parser.add_argument("--tpms-scores", default="data/from-tpms/tpms-mock.csv", help="TPMS scores CSV (no header)")
-    parser.add_argument("--topic-scores", default="data/paper_reviewer_topic_scores.csv", help="Topic scores CSV")
+    parser.add_argument("--topic-scores", default="data/paper-reviewer-topic-scores.csv", help="Topic scores CSV")
     parser.add_argument("--objective", default="max_relative", choices=["max_total", "max_relative"], help="Objective function: max_total (maximize total score), max_relative (maximize fraction of optimal unconstrained score)")
-    parser.add_argument("--hotcrp-output", default="data/to-hotcrp/asplos27-apr-assignments.csv", help="HotCRP assignments CSV output file")
+    parser.add_argument("--hotcrp-output", default="data/to-hotcrp/asplos27-apr-pc-assignments.csv", help="HotCRP assignments CSV output file")
+    parser.add_argument("--hotcrp-vc-output", default="data/to-hotcrp/asplos27-apr-vc-assignments.csv", help="HotCRP VC assignments CSV output file")
     parser.add_argument("--hotcrp-pref-output", default="data/to-hotcrp/asplos27-apr-preferences.csv", help="HotCRP preferences CSV output file")
     parser.add_argument("--hotcrp-tags-output", default="data/to-hotcrp/asplos27-apr-papertags.csv", help="HotCRP paper tags CSV output file")
     args = parser.parse_args()
@@ -41,12 +44,42 @@ def main():
     reviews_per_paper = config.get('reviews_per_paper', 22)
     max_erc_reviews_per_paper = config.get('max_erc_reviews_per_paper', 7)
     min_senior_reviewers_per_paper = config.get('min_senior_reviewers_per_paper', 1)
+    vice_chairs_per_paper = config.get('vice_chairs_per_paper', 1)
     reviewer_limits = config.get('reviewer_limits', {})
+    
+    # Read paper stats for optimal scores
+    stats_file = args.stats_file
+    stats_file_vc = args.stats_file_vc
+    paper_pc_scores_list = {}
+    paper_vc_scores_list = {}
+    
+    print(f"Reading PC paper stats from {stats_file}")
+    try:
+        with open(stats_file, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                paper = row[0]
+                scores_list = [float(s) for s in row[1:]]
+                paper_pc_scores_list[paper] = scores_list
+    except FileNotFoundError:
+        print(f"Warning: Stats file not found: {stats_file}. Will compute from assignment scores.")
+
+    print(f"Reading VC paper stats from {stats_file_vc}")
+    try:
+        with open(stats_file_vc, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                paper = row[0]
+                scores_list = [float(s) for s in row[1:]]
+                paper_vc_scores_list[paper] = scores_list
+    except FileNotFoundError:
+        print(f"Warning: Stats file not found: {stats_file_vc}. Will compute from assignment scores.")
 
     # 2. Read pcinfo for tags
     print(f"Reading PC info from {pcinfo_file}")
     full_reviewers = set()
     erc_reviewers = set()
+    vc_reviewers = set()
     try:
         with open(pcinfo_file, 'r', newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
@@ -57,6 +90,9 @@ def main():
                     full_reviewers.add(email)
                 elif 'erc' in tags:
                     erc_reviewers.add(email)
+                
+                if 'vc' in tags:
+                    vc_reviewers.add(email)
     except FileNotFoundError:
         print(f"Error: PC info file not found: {pcinfo_file}")
         return
@@ -100,8 +136,8 @@ def main():
                 reviewers.add(reviewer)
                 all_scores[(paper, reviewer)] = score
 
-                # Only consider full and erc reviewers
-                if reviewer in full_reviewers or reviewer in erc_reviewers:
+                # Consider full, erc, and vc reviewers
+                if reviewer in full_reviewers or reviewer in erc_reviewers or reviewer in vc_reviewers:
                     if score > 0: # Exclude conflicts
                         scores[(paper, reviewer)] = score
                         valid_pairs.add((paper, reviewer))
@@ -142,10 +178,16 @@ def main():
     # Calculate unconstrained optimal scores for all papers
     optimal_scores = {}
     for paper in papers:
-        all_paper_scores = [scores.get((paper, r), 0.0) for r in reviewers if (paper, r) in valid_pairs]
-        all_paper_scores.sort(reverse=True)
-        top_n_scores = all_paper_scores[:reviews_per_paper]
-        optimal_scores[paper] = sum(top_n_scores) if top_n_scores else 1.0
+        scores_list = paper_pc_scores_list.get(paper, [])
+        if scores_list:
+            top_n_scores = scores_list[:reviews_per_paper]
+            optimal_scores[paper] = sum(top_n_scores) if top_n_scores else 1.0
+        else:
+            all_paper_scores = [scores.get((paper, r), 0.0) for r in reviewers if (paper, r) in valid_pairs]
+            all_paper_scores.sort(reverse=True)
+            top_n_scores = all_paper_scores[:reviews_per_paper]
+            optimal_scores[paper] = sum(top_n_scores) if top_n_scores else 1.0
+            
         if optimal_scores[paper] == 0:
             optimal_scores[paper] = 1.0
 
@@ -160,7 +202,7 @@ def main():
     x = {}
     for paper in papers:
         for reviewer in reviewers:
-            if (paper, reviewer) in valid_pairs:
+            if (paper, reviewer) in valid_pairs and (reviewer in full_reviewers or reviewer in erc_reviewers):
                 x[(paper, reviewer)] = solver.BoolVar(f'x_{paper}_{reviewer}')
 
     # Objective
@@ -284,7 +326,7 @@ def main():
                     else:
                         writer.writerow([paper, 'pref', reviewer, -100])
         # Write context file
-        context_file = os.path.join(os.path.dirname(output_file), "assignment_context.csv")
+        context_file = os.path.join(os.path.dirname(output_file), "pc-assignment-context.csv")
         print(f"Writing assignment context to {context_file}")
         context_rows = []
         for paper in papers:
@@ -306,15 +348,19 @@ def main():
                 writer.writerow(row)
 
         # Write stats
-        stats_file = os.path.join(os.path.dirname(output_file), "assignment_stats.csv")
+        stats_file = os.path.join(os.path.dirname(output_file), "pc-assignment-stats.csv")
         print(f"Writing assignment stats to {stats_file}")
         stats_rows = []
         for paper in sorted_papers:
-            all_paper_scores = [scores[(paper, r)] for r in reviewers if (paper, r) in valid_pairs]
-            all_paper_scores.sort(reverse=True)
-            
-            top_n_scores = all_paper_scores[:reviews_per_paper]
-            optimal_score = sum(top_n_scores) / len(top_n_scores) if top_n_scores else 0
+            scores_list = paper_pc_scores_list.get(paper, [])
+            if scores_list:
+                top_n_scores = scores_list[:reviews_per_paper]
+                optimal_score = sum(top_n_scores) / len(top_n_scores) if top_n_scores else 0
+            else:
+                all_paper_scores = [scores[(paper, r)] for r in reviewers if (paper, r) in valid_pairs]
+                all_paper_scores.sort(reverse=True)
+                top_n_scores = all_paper_scores[:reviews_per_paper]
+                optimal_score = sum(top_n_scores) / len(top_n_scores) if top_n_scores else 0
             
             assigned_scores = []
             for reviewer in reviewers:
@@ -336,8 +382,8 @@ def main():
         num_papers = len(stats_rows)
         for i, row in enumerate(stats_rows):
             paper = row[0]
-            decile = int(i * 10 / num_papers)
-            tag_rows.append([paper, 'tag', f"aq#{decile}"])
+            decile = int(i * 10 / num_papers) + 1
+            tag_rows.append([paper, 'tag', 'aq', decile])
         
         # Calculate average relative score
         avg_relative_score = sum(row[3] for row in stats_rows) / len(stats_rows) if stats_rows else 0
@@ -358,13 +404,109 @@ def main():
         print(f"Writing HotCRP paper tags to {tags_output_file}")
         with open(tags_output_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(['paper', 'action', 'tag_value'])
+            writer.writerow(['paper', 'action', 'tag', 'tag_value'])
             for row in tag_rows:
                 writer.writerow(row)
                 
         print("Done.")
     else:
         print(f"Error: Solver failed with status {status}")
+    # --- Vice Chair Assignment ---
+    print("\n--- Vice Chair Assignment ---")
+    solver_vc = pywraplp.Solver.CreateSolver('SCIP')
+    if not solver_vc:
+        print("Error: SCIP solver not available for VC assignment.")
+        return
+
+    # Variables for VCs
+    y = {}
+    for paper in papers:
+        for reviewer in vc_reviewers:
+            if (paper, reviewer) in valid_pairs:
+                y[(paper, reviewer)] = solver_vc.BoolVar(f'y_{paper}_{reviewer}')
+
+    print(f"Created {len(y)} variables for VC assignment.")
+
+    # Load VC optimal scores
+    optimal_vc_scores = {}
+    for paper in papers:
+        scores_list = paper_vc_scores_list.get(paper, [])
+        if scores_list:
+            top_n_scores = scores_list[:vice_chairs_per_paper]
+            optimal_vc_scores[paper] = sum(top_n_scores) if top_n_scores else 1.0
+        else:
+            # Fallback
+            all_paper_scores = [scores.get((paper, r), 0.0) for r in vc_reviewers if (paper, r) in valid_pairs]
+            all_paper_scores.sort(reverse=True)
+            top_n_scores = all_paper_scores[:vice_chairs_per_paper]
+            optimal_vc_scores[paper] = sum(top_n_scores) if top_n_scores else 1.0
+            
+        if optimal_vc_scores[paper] == 0:
+            optimal_vc_scores[paper] = 1.0
+
+    # Objective for VCs
+    objective_vc = solver_vc.Objective()
+    if args.objective == "max_relative":
+        print("VC Objective: Maximize relative score")
+        for (paper, reviewer), var in y.items():
+            coeff = scores[(paper, reviewer)] / optimal_vc_scores[paper]
+            objective_vc.SetCoefficient(var, coeff)
+    else:
+        print("VC Objective: Maximize total score")
+        for (paper, reviewer), var in y.items():
+            objective_vc.SetCoefficient(var, scores[(paper, reviewer)])
+    objective_vc.SetMaximization()
+
+    # Constraints for VCs
+    # 1. Reviews per paper = vice_chairs_per_paper
+    for paper in papers:
+        constraint = solver_vc.Constraint(vice_chairs_per_paper, vice_chairs_per_paper)
+        for reviewer in vc_reviewers:
+            if (paper, reviewer) in y:
+                constraint.SetCoefficient(y[(paper, reviewer)], 1)
+
+    # 2. Even distribution of load among VCs
+    num_papers = len(papers)
+    num_vcs = len(vc_reviewers)
+    if num_vcs > 0:
+        target_reviews = (num_papers * vice_chairs_per_paper) / num_vcs
+        lower_bound = int(target_reviews)
+        upper_bound = lower_bound + 1
+        print(f"VC Load limits: {lower_bound} to {upper_bound}")
+        
+        for reviewer in vc_reviewers:
+            constraint = solver_vc.Constraint(lower_bound, upper_bound)
+            for paper in papers:
+                if (paper, reviewer) in y:
+                    constraint.SetCoefficient(y[(paper, reviewer)], 1)
+
+    # Solve VC assignment
+    print("Solving VC assignment...")
+    status_vc = solver_vc.Solve()
+
+    if status_vc == pywraplp.Solver.OPTIMAL or status_vc == pywraplp.Solver.FEASIBLE:
+        status_str = "OPTIMAL" if status_vc == pywraplp.Solver.OPTIMAL else "FEASIBLE"
+        print(f"VC Solution found! Status: {status_str}")
+        print(f"VC Total score: {solver_vc.Objective().Value()}")
+
+        # Write VC assignments to HotCRP format
+        hotcrp_vc_output_file = args.hotcrp_vc_output
+        vc_output_dir = os.path.dirname(hotcrp_vc_output_file)
+        if vc_output_dir and not os.path.exists(vc_output_dir):
+            os.makedirs(vc_output_dir, exist_ok=True)
+
+        print(f"Writing VC assignments to {hotcrp_vc_output_file}")
+        with open(hotcrp_vc_output_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['paper', 'action', 'email'])
+            for paper in sorted(list(papers), key=int):
+                for reviewer in vc_reviewers:
+                    if (paper, reviewer) in y:
+                        if y[(paper, reviewer)].solution_value() > 0.5:
+                            writer.writerow([paper, 'meta', reviewer])
+    else:
+        print(f"Error: VC Solver failed with status {status_vc}")
+
 
 if __name__ == "__main__":
     main()

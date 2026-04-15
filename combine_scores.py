@@ -5,9 +5,9 @@ import os
 def main():
     parser = argparse.ArgumentParser(description="Combine topic scores and TPMS scores.")
     parser.add_argument("--prefix", default="asplos27-apr", help="Conference prefix (e.g., asplos27-apr)")
-    parser.add_argument("--topic-file", default="data/paper_reviewer_topic_scores.csv", help="Topic scores CSV file")
+    parser.add_argument("--topic-file", default="data/paper-reviewer-topic-scores.csv", help="Topic scores CSV file")
     parser.add_argument("--tpms-file", default="data/from-tpms/tpms-mock.csv", help="TPMS scores CSV file")
-    parser.add_argument("--output", default="data/paper_reviewer_combined_scores.csv", help="Output CSV file path")
+    parser.add_argument("--output", default="data/paper-reviewer-combined-scores.csv", help="Output CSV file path")
     parser.add_argument("--conflicts-dir", default="data/from-hotcrp", help="Directory containing conflicts file")
     parser.add_argument("--method", choices=['weighted', 'mult', 'min', 'max'], default='weighted', help="Combination method")
     parser.add_argument("--weight-topic", type=float, default=0.5, help="Weight for topic score (for weighted method)")

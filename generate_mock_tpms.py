@@ -6,7 +6,7 @@ import random
 def main():
     parser = argparse.ArgumentParser(description="Generate mock TPMS scores based on topic scores.")
     parser.add_argument("--prefix", default="asplos27-apr", help="Conference prefix (e.g., asplos27-apr)")
-    parser.add_argument("--seed-file", default="data/paper_reviewer_topic_scores.csv", help="Seed CSV file")
+    parser.add_argument("--seed-file", default="data/paper-reviewer-topic-scores.csv", help="Seed CSV file")
     parser.add_argument("--output", default="data/from-tpms/tpms-mock.csv", help="Output CSV file path")
     parser.add_argument("--conflicts-dir", default="data/from-hotcrp", help="Directory containing conflicts file")
     parser.add_argument("--real-data", default=None, help="Path to sample real TPMS data CSV")

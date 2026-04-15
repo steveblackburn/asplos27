@@ -7,7 +7,7 @@ def main():
     parser = argparse.ArgumentParser(description="Calculate reviewer expertise scores for paper submissions.")
     parser.add_argument("--prefix", default="asplos27-apr", help="Conference prefix (e.g., asplos27-apr)")
     parser.add_argument("--data-dir", default="data/from-hotcrp", help="Directory containing input CSV files")
-    parser.add_argument("--output", default="data/paper_reviewer_topic_scores.csv", help="Output CSV file path")
+    parser.add_argument("--output", default="data/paper-reviewer-topic-scores.csv", help="Output CSV file path")
     args = parser.parse_args()
 
     prefix = args.prefix
