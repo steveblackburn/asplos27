@@ -1,10 +1,10 @@
 # Reviewer Assignment Constraints
 
 # Target number of reviews per paper
-reviews_per_paper: 22
+reviews_per_paper: 14
 
 # Maximum number of External Review Committee (ERC) reviewers per paper
-max_erc_reviews_per_paper: 7
+max_erc_reviews_per_paper: 4
 
 # Minimum number of senior reviewers per paper
 min_senior_reviewers_per_paper: 1

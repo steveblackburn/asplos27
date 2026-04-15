@@ -61,18 +61,27 @@ def main():
     tpms_scores = {}
     try:
         with open(tpms_file, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+            reader = csv.reader(f)
             for row in reader:
-                tpms_scores[(row['paper'], row['reviewer'])] = float(row['score'])
+                if len(row) >= 3:
+                    tpms_scores[(row[0], row[1])] = float(row[2])
     except FileNotFoundError:
         print(f"Error: TPMS scores file not found: {tpms_file}")
-        return
-    except KeyError as e:
-        print(f"Error: Missing expected column in TPMS scores file: {e}")
         return
 
     # 4. Combine scores
     results = []
+    
+    # Identify missing reviewers
+    topic_reviewers = set(r for p, r in topic_scores.keys())
+    tpms_reviewers = set(r for p, r in tpms_scores.keys())
+    missing_reviewers = topic_reviewers - tpms_reviewers
+    
+    if missing_reviewers:
+        print(f"Warning: The following {len(missing_reviewers)} reviewers are missing from TPMS data:")
+        for r in sorted(list(missing_reviewers)):
+            print(f"  {r}")
+            
     all_pairs = set(topic_scores.keys()).union(set(tpms_scores.keys()))
 
     for paper, reviewer in sorted(list(all_pairs), key=lambda x: (int(x[0]), x[1])):
@@ -80,18 +89,24 @@ def main():
             final_score = 0
         else:
             t_score = topic_scores.get((paper, reviewer), 0.0)
-            m_score = tpms_scores.get((paper, reviewer), 0.0)
-
-            if method == 'weighted':
-                combined = (w_topic * t_score + w_tpms * m_score) / (w_topic + w_tpms)
-            elif method == 'mult':
-                combined = t_score * m_score
-            elif method == 'min':
-                combined = min(t_score, m_score)
-            elif method == 'max':
-                combined = max(t_score, m_score)
+            
+            if (paper, reviewer) in tpms_scores:
+                m_score = tpms_scores[(paper, reviewer)]
+                
+                if method == 'weighted':
+                    combined = (w_topic * t_score + w_tpms * m_score) / (w_topic + w_tpms)
+                elif method == 'mult':
+                    combined = t_score * m_score
+                elif method == 'min':
+                    combined = min(t_score, m_score)
+                elif method == 'max':
+                    combined = max(t_score, m_score)
+                else:
+                    combined = 0.0
             else:
-                combined = 0.0
+                # Reviewer missing from TPMS data for this paper (or entirely)
+                # Use topic score alone
+                combined = t_score
 
             # Scale to 0-100 and round to integer
             final_score = round(combined * 100)

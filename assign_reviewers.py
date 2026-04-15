@@ -12,6 +12,8 @@ def main():
     parser.add_argument("--demographics", default="data/pc_demographics.csv", help="PC demographics CSV")
     parser.add_argument("--pcinfo", default="data/from-hotcrp/asplos27-apr-pcinfo.csv", help="PC info CSV")
     parser.add_argument("--output", default="data/assignments.csv", help="Output CSV file")
+    parser.add_argument("--tpms-scores", default="data/from-tpms/tpms-mock.csv", help="TPMS scores CSV (no header)")
+    parser.add_argument("--topic-scores", default="data/paper_reviewer_topic_scores.csv", help="Topic scores CSV")
     args = parser.parse_args()
 
     prefix = args.prefix
@@ -20,6 +22,8 @@ def main():
     demographics_file = args.demographics
     pcinfo_file = args.pcinfo
     output_file = args.output
+    tpms_scores_file = args.tpms_scores
+    topic_scores_file = args.topic_scores
 
     # 1. Read constraints
     print(f"Reading constraints from {constraints_file}")
@@ -104,6 +108,29 @@ def main():
 
     print(f"Found {len(papers)} papers and {len(reviewers)} total reviewers in scores file.")
     print(f"Eligible reviewers: Full={len(full_reviewers)}, ERC={len(erc_reviewers)}")
+
+    # Read TPMS scores (no header)
+    tpms_scores_dict = {}
+    try:
+        print(f"Reading TPMS scores from {tpms_scores_file}")
+        with open(tpms_scores_file, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) >= 3:
+                    tpms_scores_dict[(row[0], row[1])] = float(row[2])
+    except FileNotFoundError:
+        print(f"Warning: TPMS scores file not found: {tpms_scores_file}")
+
+    # Read topic scores (with header)
+    topic_scores_dict = {}
+    try:
+        print(f"Reading topic scores from {topic_scores_file}")
+        with open(topic_scores_file, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                topic_scores_dict[(row['paper'], row['reviewer'])] = float(row['score'])
+    except FileNotFoundError:
+        print(f"Warning: Topic scores file not found: {topic_scores_file}")
     print(f"Valid pairs: {len(valid_pairs)} (after filtering for eligible reviewers and non-zero scores)")
 
     # 5. Setup Solver
@@ -198,6 +225,28 @@ def main():
                     if (paper, reviewer) in x:
                         if x[(paper, reviewer)].solution_value() > 0.5:
                             writer.writerow([paper, reviewer])
+        # Write context file
+        context_file = os.path.join(os.path.dirname(output_file), "assignment_context.csv")
+        print(f"Writing assignment context to {context_file}")
+        context_rows = []
+        for paper in papers:
+            for reviewer in reviewers:
+                assigned = "yes" if (paper, reviewer) in x and x[(paper, reviewer)].solution_value() > 0.5 else "no"
+                comb_score = scores.get((paper, reviewer), 0.0)
+                tpms_score = tpms_scores_dict.get((paper, reviewer), 0.0)
+                topic_score = topic_scores_dict.get((paper, reviewer), 0.0)
+                
+                context_rows.append([paper, reviewer, assigned, comb_score, tpms_score, topic_score])
+                
+        # Sort by paper number and then by combined score descending
+        context_rows.sort(key=lambda x: (int(x[0]), -x[3]))
+        
+        with open(context_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['paper', 'reviewer', 'assigned', 'combined_score', 'tpms_score', 'topic_score'])
+            for row in context_rows:
+                writer.writerow(row)
+
         # Write stats
         stats_file = os.path.join(os.path.dirname(output_file), "assignment_stats.csv")
         print(f"Writing assignment stats to {stats_file}")
