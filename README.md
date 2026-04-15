@@ -23,5 +23,10 @@ Scripts for processing reviewer data for the ASPLOS 2027 conference.
 
 1. Run the `assign_reviewers.py` script (this will produce a reviewer assignment)
 
+## Upload to HotCRP
 
+1. Upload pc assignments from `data/to-hotcrp/asplos27-apr-pc-assignments.csv` (Assignments/Bulk update)
+2. Upload vc assignments from `data/to-hotcrp/asplos27-apr-vc-assignments.csv` (Assignments/Bulk update)
+3. Upload reviewer scores from `data/to-hotcrp/asplos27-apr-preferences.csv`(Assignments/Bulk update)
+4. Upload paper tags from `data/to-hotcrp/asplos27-apr-papertags.csv` (Reviews/Bulk update)
 
