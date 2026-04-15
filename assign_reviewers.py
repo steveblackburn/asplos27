@@ -15,6 +15,9 @@ def main():
     parser.add_argument("--tpms-scores", default="data/from-tpms/tpms-mock.csv", help="TPMS scores CSV (no header)")
     parser.add_argument("--topic-scores", default="data/paper_reviewer_topic_scores.csv", help="Topic scores CSV")
     parser.add_argument("--objective", default="max_relative", choices=["max_total", "max_relative"], help="Objective function: max_total (maximize total score), max_relative (maximize fraction of optimal unconstrained score)")
+    parser.add_argument("--hotcrp-output", default="data/to-hotcrp/asplos27-apr-assignments.csv", help="HotCRP assignments CSV output file")
+    parser.add_argument("--hotcrp-pref-output", default="data/to-hotcrp/asplos27-apr-preferences.csv", help="HotCRP preferences CSV output file")
+    parser.add_argument("--hotcrp-tags-output", default="data/to-hotcrp/asplos27-apr-papertags.csv", help="HotCRP paper tags CSV output file")
     args = parser.parse_args()
 
     prefix = args.prefix
@@ -80,6 +83,7 @@ def main():
     # 4. Read scores and identify valid pairs
     print(f"Reading scores from {scores_file}")
     scores = {}
+    all_scores = {}
     papers = set()
     reviewers = set()
     valid_pairs = set()
@@ -94,6 +98,7 @@ def main():
 
                 papers.add(paper)
                 reviewers.add(reviewer)
+                all_scores[(paper, reviewer)] = score
 
                 # Only consider full and erc reviewers
                 if reviewer in full_reviewers or reviewer in erc_reviewers:
@@ -244,6 +249,40 @@ def main():
                     if (paper, reviewer) in x:
                         if x[(paper, reviewer)].solution_value() > 0.5:
                             writer.writerow([paper, reviewer])
+
+        # Write HotCRP formatted assignments
+        hotcrp_output_file = args.hotcrp_output
+        hotcrp_output_dir = os.path.dirname(hotcrp_output_file)
+        if hotcrp_output_dir and not os.path.exists(hotcrp_output_dir):
+            os.makedirs(hotcrp_output_dir, exist_ok=True)
+            
+        print(f"Writing HotCRP assignments to {hotcrp_output_file}")
+        with open(hotcrp_output_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['paper', 'action', 'email', 'round'])
+            for paper in sorted_papers:
+                for reviewer in sorted(list(reviewers)):
+                    if (paper, reviewer) in x:
+                        if x[(paper, reviewer)].solution_value() > 0.5:
+                            writer.writerow([paper, 'primary', reviewer, 'RR'])
+
+        # Write HotCRP preferences
+        pref_output_file = args.hotcrp_pref_output
+        pref_output_dir = os.path.dirname(pref_output_file)
+        if pref_output_dir and not os.path.exists(pref_output_dir):
+            os.makedirs(pref_output_dir, exist_ok=True)
+            
+        print(f"Writing HotCRP preferences to {pref_output_file}")
+        with open(pref_output_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['paper', 'action', 'email', 'preference'])
+            for paper in sorted_papers:
+                for reviewer in sorted(list(reviewers)):
+                    score = all_scores.get((paper, reviewer), 0.0)
+                    if score > 0:
+                        writer.writerow([paper, 'pref', reviewer, int(score)])
+                    else:
+                        writer.writerow([paper, 'pref', reviewer, -100])
         # Write context file
         context_file = os.path.join(os.path.dirname(output_file), "assignment_context.csv")
         print(f"Writing assignment context to {context_file}")
@@ -292,6 +331,14 @@ def main():
         # Sort by actual score ascending (worst to best)
         stats_rows.sort(key=lambda x: x[1])
         
+        # Generate paper tags based on deciles of assignment quality
+        tag_rows = []
+        num_papers = len(stats_rows)
+        for i, row in enumerate(stats_rows):
+            paper = row[0]
+            decile = int(i * 10 / num_papers)
+            tag_rows.append([paper, 'tag', f"aq#{decile}"])
+        
         # Calculate average relative score
         avg_relative_score = sum(row[3] for row in stats_rows) / len(stats_rows) if stats_rows else 0
         print(f"Average relative score: {avg_relative_score:.4f}")
@@ -302,6 +349,19 @@ def main():
             for row in stats_rows:
                 writer.writerow([row[0], f"{row[1]:.2f}", f"{row[2]:.2f}", f"{row[3]:.4f}"])
         
+        # Write HotCRP paper tags
+        tags_output_file = args.hotcrp_tags_output
+        tags_output_dir = os.path.dirname(tags_output_file)
+        if tags_output_dir and not os.path.exists(tags_output_dir):
+            os.makedirs(tags_output_dir, exist_ok=True)
+            
+        print(f"Writing HotCRP paper tags to {tags_output_file}")
+        with open(tags_output_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['paper', 'action', 'tag_value'])
+            for row in tag_rows:
+                writer.writerow(row)
+                
         print("Done.")
     else:
         print(f"Error: Solver failed with status {status}")
