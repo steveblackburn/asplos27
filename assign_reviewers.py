@@ -11,10 +11,10 @@ def main():
     parser.add_argument("--stats-file", default="data/paper-stats-pc.csv", help="PC paper stats CSV (scores list)")
     parser.add_argument("--stats-file-vc", default="data/paper-stats-vc.csv", help="VC paper stats CSV (scores list)")
     parser.add_argument("--constraints", default="constraints.yaml", help="Constraints YAML file")
-    parser.add_argument("--demographics", default="data/pc-demographics.csv", help="PC demographics CSV")
+    parser.add_argument("--demographics", default="data/from-sheets/pc-demographics.csv", help="PC demographics CSV")
     parser.add_argument("--pcinfo", default="data/from-hotcrp/asplos27-apr-pcinfo.csv", help="PC info CSV")
     parser.add_argument("--output", default="data/pc-assignments.csv", help="Output CSV file")
-    parser.add_argument("--tpms-scores", default="data/from-tpms/tpms-mock.csv", help="TPMS scores CSV (no header)")
+    parser.add_argument("--tpms-scores", default="data/from-tpms/asplos27_dryrun_scores.csv", help="TPMS scores CSV (no header)")
     parser.add_argument("--topic-scores", default="data/paper-reviewer-topic-scores.csv", help="Topic scores CSV")
     parser.add_argument("--objective", default="max_relative", choices=["max_total", "max_relative"], help="Objective function: max_total (maximize total score), max_relative (maximize fraction of optimal unconstrained score)")
     parser.add_argument("--hotcrp-output", default="data/to-hotcrp/asplos27-apr-pc-assignments.csv", help="HotCRP assignments CSV output file")
@@ -122,11 +122,27 @@ def main():
         with open(demographics_file, 'r', newline='', encoding='utf-8') as f:
             reader = csv.reader(f)
             for row in reader:
-                if len(row) >= 3:
-                    email = row[0]
-                    seniority = row[2]
+                if len(row) >= 7:
+                    email = row[2].strip()
+                    field_val = row[5].strip().lower()
+                    field = ''
+                    if 'acad' in field_val:
+                        field = 'A'
+                    elif 'ind' in field_val:
+                        field = 'I'
+                    elif 'gov' in field_val:
+                        field = 'G'
+                    elif field_val:
+                        field = field_val[0].upper()
+                        
+                    seniority = row[6].strip()
+                    
                     if seniority == 'S':
                         senior_reviewers.add(email)
+                        
+                    if email in email_to_info:
+                        email_to_info[email]['seniority'] = seniority
+                        email_to_info[email]['field'] = field
     except FileNotFoundError:
         print(f"Error: Demographics file not found: {demographics_file}")
         return
@@ -536,27 +552,38 @@ def main():
         for reviewer in reviewers:
             assigned = "O" if (paper, reviewer) in x and x[(paper, reviewer)].solution_value() > 0.5 else "X"
             comb_score = scores.get((paper, reviewer), 0.0)
-            tpms_score = tpms_scores_dict.get((paper, reviewer), 0.0)
-            topic_score = topic_scores_dict.get((paper, reviewer), 0.0)
+            tpms_val = tpms_scores_dict.get((paper, reviewer), "")
+            tpms_score = f"{tpms_val:.2f}" if tpms_val != "" else ""
+            topic_score = f"{topic_scores_dict.get((paper, reviewer), 0.0):.2f}"
             
-            info = email_to_info.get(reviewer, {'name': '', 'role': ''})
+            info = email_to_info.get(reviewer, {'name': '', 'role': '', 'seniority': 'J', 'field': ''})
             name = info['name']
             role = info['role']
+            seniority = info.get('seniority', 'J')
+            field = info.get('field', '')
             
             # Check for meta assignment
             if (paper, reviewer) in meta_assignments and role == 'v':
                 assigned = "M"
                 
-            context_rows.append([paper, assigned, role, comb_score, tpms_score, topic_score, name, reviewer])
+            context_rows.append([paper, assigned, role, comb_score, tpms_score, topic_score, seniority, field, name, reviewer])
             
     # Sort by paper number and then by combined score descending
     context_rows.sort(key=lambda x: (int(x[0]), -x[3]))
     
+    headers = ['paper', 'assigned', 'role', 'combined_score', 'tpms_score', 'topic_score', 'seniority', 'field', 'name', 'reviewer']
+    
+    # Calculate max width for each column (excluding header)
+    widths = [max(len(str(row[i])) for row in context_rows) for i in range(len(headers))]
+    
     with open(context_file, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        writer.writerow(['paper', 'assigned', 'role', 'combined_score', 'tpms_score', 'topic_score', 'name', 'reviewer'])
+        # Write header (first column and last two columns unpadded)
+        header_strings = [headers[0]] + [f"{headers[i]:<{widths[i]}}" for i in range(1, 8)] + [headers[8], headers[9]]
+        f.write(",".join(header_strings) + "\n")
+        # Write rows (first column and last two columns unpadded)
         for row in context_rows:
-            writer.writerow(row)
+            row_strings = [str(row[0])] + [f"{str(row[i]):<{widths[i]}}" for i in range(1, 8)] + [str(row[8]), str(row[9])]
+            f.write(",".join(row_strings) + "\n")
 
 
 if __name__ == "__main__":

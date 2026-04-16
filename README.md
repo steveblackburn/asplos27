@@ -29,5 +29,5 @@ Scripts for processing reviewer data for the ASPLOS 2027 conference.
 1. Upload pc assignments from `data/to-hotcrp/asplos27-apr-pc-assignments.csv` (Assignments/Bulk update)
 2. Upload vc assignments from `data/to-hotcrp/asplos27-apr-vc-assignments.csv` (Assignments/Bulk update)
 3. Upload reviewer scores from `data/to-hotcrp/asplos27-apr-preferences.csv`(Assignments/Bulk update)
-4. Upload paper tags from `data/to-hotcrp/asplos27-apr-papertags.csv` (Reviews/Bulk update)
+4. Upload paper tags from `data/to-hotcrp/asplos27-apr-papertags.csv` (Assignments/Bulk update)
 

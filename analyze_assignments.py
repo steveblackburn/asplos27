@@ -6,7 +6,7 @@ import yaml
 # Paths
 constraints_path = "constraints.yaml"
 pcinfo_path = "data/from-hotcrp/asplos27-apr-pcinfo.csv"
-demographics_path = "data/pc-demographics.csv"
+demographics_path = "data/from-sheets/pc-demographics.csv"
 scores_path = "data/paper-reviewer-combined-scores.csv"
 stats_pc_path = "data/paper-stats-pc.csv"
 stats_vc_path = "data/paper-stats-vc.csv"
@@ -53,9 +53,9 @@ def load_demographics():
     with open(demographics_path, "r", encoding="utf-8") as f:
         reader = csv.reader(f)
         for row in reader:
-            if len(row) >= 3:
-                email = row[0]
-                seniority = row[2]
+            if len(row) >= 7:
+                email = row[2]
+                seniority = row[-1]
                 if seniority == "S":
                     senior_reviewers.add(email)
     return senior_reviewers

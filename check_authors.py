@@ -28,14 +28,15 @@ def main():
     with open(authors_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            is_contact = row.get("iscontact", "").lower()
+            is_contact = row.get("iscontact") or ""
+            is_contact = is_contact.lower()
             if is_contact == "nonauthor":
                 continue
 
-            email = row.get("email", "").strip()
-            paper = row.get("paper", "").strip()
-            given_name = row.get("given_name", "").strip()
-            family_name = row.get("family_name", "").strip()
+            email = (row.get("email") or "").strip()
+            paper = (row.get("paper") or "").strip()
+            given_name = (row.get("given_name") or "").strip()
+            family_name = (row.get("family_name") or "").strip()
             name = f"{given_name} {family_name}".strip()
 
             if not email or not paper:
@@ -63,7 +64,9 @@ def main():
         print("\nViolations found:")
         for email, count in sorted(violations, key=lambda x: x[1], reverse=True):
             name = email_to_name.get(email, email)
-            print(f"  {name} ({email}): {count} submissions")
+            papers = author_to_papers.get(email, set())
+            papers_str = ", ".join(sorted(list(papers), key=int))
+            print(f"  {name} ({email}): {count} submissions (Papers: {papers_str})")
     else:
         print("\nNo violations found.")
 

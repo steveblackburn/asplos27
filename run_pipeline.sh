@@ -3,24 +3,33 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
+echo
 echo "Step 1: Generating topic scores..."
 python3 generate_topic_scores.py
 
-echo "Step 2: Generating mock TPMS scores..."
+#echo "Step 2: Generating mock TPMS scores..."
 # Note: This generates mock data. If you have real TPMS data, 
 # you should skip this step or provide the path to real data.
-python3 generate_mock_tpms.py
+#python3 generate_mock_tpms.py
 
-echo "Step 3: Combining scores..."
+echo
+echo "Step 2: Combining scores..."
 python3 combine_scores.py
 
-echo "Step 4: Analyzing and splitting scores..."
+echo
+echo "Step 3: Analyzing and splitting scores..."
 python3 analyze_scores.py
 
-echo "Step 5: Running reviewer assignment..."
+echo
+echo "Step 4: Running reviewer assignment..."
 python3 assign_reviewers.py
 
-echo "Step 6: Analyzing assignments..."
+echo
+echo "Step 5: Analyzing assignments..."
 python3 analyze_assignments.py
+
+echo
+echo "Step 6: Checking author submission limits..."
+python3 check_authors.py
 
 echo "All scripts executed successfully!"
