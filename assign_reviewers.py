@@ -80,19 +80,33 @@ def main():
     full_reviewers = set()
     erc_reviewers = set()
     vc_reviewers = set()
+    email_to_info = {}
     try:
         with open(pcinfo_file, 'r', newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 email = row['email']
                 tags = row.get('tags', '')
+                given_name = row.get('given_name', '')
+                family_name = row.get('family_name', '')
+                
+                role = ''
                 if 'pc-full' in tags:
                     full_reviewers.add(email)
+                    role = 'p'
                 elif 'erc' in tags:
                     erc_reviewers.add(email)
+                    role = 'e'
                 
                 if 'vc' in tags:
                     vc_reviewers.add(email)
+                    role = 'v'
+                    
+                if email:
+                    email_to_info[email] = {
+                        'name': f"{given_name} {family_name}".strip(),
+                        'role': role
+                    }
     except FileNotFoundError:
         print(f"Error: PC info file not found: {pcinfo_file}")
         return
@@ -325,27 +339,7 @@ def main():
                         writer.writerow([paper, 'pref', reviewer, int(score)])
                     else:
                         writer.writerow([paper, 'pref', reviewer, -100])
-        # Write context file
-        context_file = os.path.join(os.path.dirname(output_file), "pc-assignment-context.csv")
-        print(f"Writing assignment context to {context_file}")
-        context_rows = []
-        for paper in papers:
-            for reviewer in reviewers:
-                assigned = "yes" if (paper, reviewer) in x and x[(paper, reviewer)].solution_value() > 0.5 else "no"
-                comb_score = scores.get((paper, reviewer), 0.0)
-                tpms_score = tpms_scores_dict.get((paper, reviewer), 0.0)
-                topic_score = topic_scores_dict.get((paper, reviewer), 0.0)
-                
-                context_rows.append([paper, reviewer, assigned, comb_score, tpms_score, topic_score])
-                
-        # Sort by paper number and then by combined score descending
-        context_rows.sort(key=lambda x: (int(x[0]), -x[3]))
-        
-        with open(context_file, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow(['paper', 'reviewer', 'assigned', 'combined_score', 'tpms_score', 'topic_score'])
-            for row in context_rows:
-                writer.writerow(row)
+
 
         # Write stats
         stats_file = os.path.join(os.path.dirname(output_file), "pc-assignment-stats.csv")
@@ -484,6 +478,7 @@ def main():
     print("Solving VC assignment...")
     status_vc = solver_vc.Solve()
 
+    meta_assignments = set()
     if status_vc == pywraplp.Solver.OPTIMAL or status_vc == pywraplp.Solver.FEASIBLE:
         status_str = "OPTIMAL" if status_vc == pywraplp.Solver.OPTIMAL else "FEASIBLE"
         print(f"VC Solution found! Status: {status_str}")
@@ -504,8 +499,39 @@ def main():
                     if (paper, reviewer) in y:
                         if y[(paper, reviewer)].solution_value() > 0.5:
                             writer.writerow([paper, 'meta', reviewer])
+                            meta_assignments.add((paper, reviewer))
     else:
         print(f"Error: VC Solver failed with status {status_vc}")
+
+    # Write context file
+    context_file = os.path.join(os.path.dirname(output_file), "pc-assignment-context.csv")
+    print(f"Writing assignment context to {context_file}")
+    context_rows = []
+    for paper in papers:
+        for reviewer in reviewers:
+            assigned = "O" if (paper, reviewer) in x and x[(paper, reviewer)].solution_value() > 0.5 else "X"
+            comb_score = scores.get((paper, reviewer), 0.0)
+            tpms_score = tpms_scores_dict.get((paper, reviewer), 0.0)
+            topic_score = topic_scores_dict.get((paper, reviewer), 0.0)
+            
+            info = email_to_info.get(reviewer, {'name': '', 'role': ''})
+            name = info['name']
+            role = info['role']
+            
+            # Check for meta assignment
+            if (paper, reviewer) in meta_assignments and role == 'v':
+                assigned = "M"
+                
+            context_rows.append([paper, assigned, role, comb_score, tpms_score, topic_score, name, reviewer])
+            
+    # Sort by paper number and then by combined score descending
+    context_rows.sort(key=lambda x: (int(x[0]), -x[3]))
+    
+    with open(context_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['paper', 'assigned', 'role', 'combined_score', 'tpms_score', 'topic_score', 'name', 'reviewer'])
+        for row in context_rows:
+            writer.writerow(row)
 
 
 if __name__ == "__main__":
