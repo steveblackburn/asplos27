@@ -1,10 +1,13 @@
 # Reviewer Assignment Constraints
 
 # Target number of reviews per paper
-reviews_per_paper: 8
+reviews_per_paper: 3
 
 # Maximum number of External Review Committee (ERC) reviewers per paper
-max_erc_reviews_per_paper: 2
+max_erc_reviews_per_paper: 1
+
+# ERC to reviewer ratio
+erc_load_factor: 0.333
 
 # Minimum number of senior reviewers per paper
 min_senior_reviewers_per_paper: 1

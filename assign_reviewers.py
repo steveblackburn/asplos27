@@ -46,6 +46,7 @@ def main():
     min_senior_reviewers_per_paper = config.get('min_senior_reviewers_per_paper', 1)
     vice_chairs_per_paper = config.get('vice_chairs_per_paper', 1)
     reviewer_limits = config.get('reviewer_limits', {})
+    erc_load_factor = config.get('erc_load_factor', 0.333)
     
     # Read paper stats for optimal scores
     stats_file = args.stats_file
@@ -255,15 +256,39 @@ def main():
                 constraint.SetCoefficient(x[(paper, reviewer)], 1)
 
     # d. Reviewer load bounds
-    # Full: 8-9, ERC: 2-3
-    # Except if listed in reviewer_limits
+    num_papers = len(papers)
+    num_full = len(full_reviewers)
+    num_erc = len(erc_reviewers)
+
+    total_reviews = num_papers * reviews_per_paper
+    max_erc_possible = num_papers * max_erc_reviews_per_paper
+
+    # Solve for target loads
+    target_full_load = total_reviews / (num_full + erc_load_factor * num_erc) if (num_full + erc_load_factor * num_erc) > 0 else 0
+    target_erc_load = erc_load_factor * target_full_load
+
+    # Cap ERC load if it exceeds max possible
+    if num_erc * target_erc_load > max_erc_possible:
+        target_erc_load = max_erc_possible / num_erc if num_erc > 0 else 0
+        target_full_load = (total_reviews - num_erc * target_erc_load) / num_full if num_full > 0 else 0
+
+    full_min_l = int(target_full_load)
+    full_max_l = full_min_l + 1
+
+    erc_min_l = int(target_erc_load)
+    erc_max_l = erc_min_l + 1
+
+    print(f"Calculated Load limits:")
+    print(f"  Full PC: {full_min_l} to {full_max_l}")
+    print(f"  ERC: {erc_min_l} to {erc_max_l}")
+
     for reviewer in reviewers:
         if reviewer in full_reviewers:
-            min_l = 8
-            max_l = 9
+            min_l = full_min_l
+            max_l = full_max_l
         elif reviewer in erc_reviewers:
-            min_l = 2
-            max_l = 3
+            min_l = erc_min_l
+            max_l = erc_max_l
         else:
             continue # Skip reviewers not in either list (they won't have valid pairs anyway)
 
