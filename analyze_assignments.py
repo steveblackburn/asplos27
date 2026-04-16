@@ -270,7 +270,14 @@ def main():
             print(f"  {name}: {vc_exception_loads[email]} assignments")
 
     # Summarization
-    print("\n--- Assignment Summary ---")
+    print(
+        "\nThe following summaries capture the distribution of assignment quality among papers.\n"
+        "Assignment quality is measured in terms of average reviewer scores per paper (/100),\n"
+        "minimum reviewer scores per paper (/100), and the ratio between the assignment quality\n"
+        "and the optimal assignment (assigning the best available reviewers, which could happen\n"
+        "if reviewer loads were unbounded)."
+    )
+    print("\n--- Per-Paper PC Assignment Summary (distributions, in deciles) ---")
 
     avg_scores = []
     min_scores = []
@@ -318,7 +325,7 @@ def main():
         + " ".join(f"{x:.2f}" for x in deciles_ratio)
     )
     # VC Score Summary
-    print("\n--- VC Assignment Summary ---")
+    print("\n--- Per-Paper VC Assignment Summary (distributions, in deciles) ---")
     vc_avg_scores = []
     vc_min_scores = []
     vc_ratios = []
@@ -365,6 +372,114 @@ def main():
     print(
         "Average/optimal ratios:  "
         + " ".join(f"{x:.2f}" for x in deciles_vc_ratio)
+    )
+
+    # --- Per Reviewer Analysis ---
+    print(
+        "\n\nThe following summaries capture the distribution of assignment quality among reviewers.\n"
+        "Assignment quality is measured in terms of average reviewer scores per reviewer (/100),\n"
+        "minimum reviewer scores per reviewer (/100), and the ratio between the assignment quality\n"
+        "and the optimal assignment (assigning the papers they score highest on)."
+    )
+
+    # PC Reviewers
+    reviewer_avg_scores = []
+    reviewer_min_scores = []
+    reviewer_ratios = []
+
+    reviewer_to_all_scores = {}
+    for (paper, reviewer), score in scores.items():
+        if reviewer not in reviewer_to_all_scores:
+            reviewer_to_all_scores[reviewer] = []
+        reviewer_to_all_scores[reviewer].append(score)
+
+    for reviewer, assigned_papers in reviewer_to_papers.items():
+        if not assigned_papers:
+            continue
+        assigned_scores = [
+            scores.get((paper, reviewer), 0.0) for paper in assigned_papers
+        ]
+        avg_score = sum(assigned_scores) / len(assigned_scores)
+        min_score = min(assigned_scores)
+
+        all_reviewer_scores = reviewer_to_all_scores.get(reviewer, [])
+        top_n = sorted(all_reviewer_scores, reverse=True)[
+            : len(assigned_papers)
+        ]
+        optimal_score = sum(top_n) / len(top_n) if top_n else 1.0
+
+        if optimal_score == 0:
+            optimal_score = 1.0
+
+        reviewer_avg_scores.append(avg_score)
+        reviewer_min_scores.append(min_score)
+        reviewer_ratios.append(avg_score / optimal_score)
+
+    deciles_rev_avg = get_deciles(reviewer_avg_scores)
+    deciles_rev_min = get_deciles(reviewer_min_scores)
+    deciles_rev_ratio = get_deciles(reviewer_ratios)
+
+    print(
+        "\n--- Per-Reviewer PC Assignment Summary (distributions, in deciles) ---"
+    )
+    print(
+        "Average reviewer scores: "
+        + " ".join(f"{x:.1f}" for x in deciles_rev_avg)
+    )
+    print(
+        "Minimum reviewer scores: "
+        + " ".join(f"{x:.1f}" for x in deciles_rev_min)
+    )
+    print(
+        "Average/optimal ratios:  "
+        + " ".join(f"{x:.2f}" for x in deciles_rev_ratio)
+    )
+
+    # VC Reviewers
+    vc_reviewer_avg_scores = []
+    vc_reviewer_min_scores = []
+    vc_reviewer_ratios = []
+
+    for reviewer, assigned_papers in vc_reviewer_to_papers.items():
+        if not assigned_papers:
+            continue
+        assigned_scores = [
+            scores.get((paper, reviewer), 0.0) for paper in assigned_papers
+        ]
+        avg_score = sum(assigned_scores) / len(assigned_scores)
+        min_score = min(assigned_scores)
+
+        all_reviewer_scores = reviewer_to_all_scores.get(reviewer, [])
+        top_n = sorted(all_reviewer_scores, reverse=True)[
+            : len(assigned_papers)
+        ]
+        optimal_score = sum(top_n) / len(top_n) if top_n else 1.0
+
+        if optimal_score == 0:
+            optimal_score = 1.0
+
+        vc_reviewer_avg_scores.append(avg_score)
+        vc_reviewer_min_scores.append(min_score)
+        vc_reviewer_ratios.append(avg_score / optimal_score)
+
+    deciles_vc_rev_avg = get_deciles(vc_reviewer_avg_scores)
+    deciles_vc_rev_min = get_deciles(vc_reviewer_min_scores)
+    deciles_vc_rev_ratio = get_deciles(vc_reviewer_ratios)
+
+    print(
+        "\n--- Per-Reviewer VC Assignment Summary (distributions, in deciles) ---"
+    )
+    print(
+        "Average reviewer scores: "
+        + " ".join(f"{x:.1f}" for x in deciles_vc_rev_avg)
+    )
+    print(
+        "Minimum reviewer scores: "
+        + " ".join(f"{x:.1f}" for x in deciles_vc_rev_min)
+    )
+    print(
+        "Average/optimal ratios:  "
+        + " ".join(f"{x:.2f}" for x in deciles_vc_rev_ratio)
     )
 
 
