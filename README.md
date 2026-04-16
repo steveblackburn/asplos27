@@ -10,6 +10,7 @@ Scripts for processing reviewer data for the ASPLOS 2027 conference.
 4. Export required csv's from HotCRP intothe `from-hotcrp` directory:
    - `<conference_name>-pcconflicts.csv` _(select all papers then Download PC Conflicts)_
    - `<conference_name>-topics.csv` _(select all papers then Download PC Topics)_
+   - `<conference_name>-authors.csv` _(select all papers then Download Authors)_
    - `<conference_name>-pcinfo.csv` _(users, Program Committee, View options, check 'Tags' and 'Topics' the Download, PC Info)_
 5. Add the tpms scores into the `from-tpms` directory as csv.
 

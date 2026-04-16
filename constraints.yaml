@@ -1,10 +1,10 @@
 # Reviewer Assignment Constraints
 
 # Target number of reviews per paper
-reviews_per_paper: 12
+reviews_per_paper: 8
 
 # Maximum number of External Review Committee (ERC) reviewers per paper
-max_erc_reviews_per_paper: 4
+max_erc_reviews_per_paper: 2
 
 # Minimum number of senior reviewers per paper
 min_senior_reviewers_per_paper: 1
@@ -19,3 +19,6 @@ reviewer_limits:
   david.black-schaffer@it.uu.se: 2
   nandita@cs.toronto.edu: 4
   neil.zhao@utexas.edu: 3
+
+# Authorship limit declared in CFP
+max_submissions_per_author: 4
