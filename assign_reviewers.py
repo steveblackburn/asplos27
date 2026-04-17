@@ -467,6 +467,10 @@ def main():
             paper = row[0]
             decile = int(i * 10 / num_papers) + 1
             tag_rows.append([paper, 'tag', 'aq', decile])
+            
+            tpms_val = row[4]
+            tpms_tag_value = max(1, round(tpms_val * 100))
+            tag_rows.append([paper, 'tag', 'tpms', tpms_tag_value])
         
         # Calculate average relative score
         avg_relative_score = sum(row[3] for row in stats_rows) / len(stats_rows) if stats_rows else 0
