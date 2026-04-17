@@ -5,11 +5,11 @@ import os
 def main():
     parser = argparse.ArgumentParser(description="Combine topic scores and TPMS scores.")
     parser.add_argument("--prefix", default="asplos27-apr", help="Conference prefix (e.g., asplos27-apr)")
-    parser.add_argument("--topic-file", default="data/paper-reviewer-topic-scores.csv", help="Topic scores CSV file")
-    parser.add_argument("--tpms-file", default="data/from-tpms/asplos27_scores.csv", help="TPMS scores CSV file")
+    parser.add_argument("--topic-file", default="data/paper-reviewer-scaled-topic.csv", help="Topic scores CSV file")
+    parser.add_argument("--tpms-file", default="data/paper-reviewer-scaled-tpms.csv", help="TPMS scores CSV file")
     parser.add_argument("--output", default="data/paper-reviewer-combined-scores.csv", help="Output CSV file path")
     parser.add_argument("--conflicts-dir", default="data/from-hotcrp", help="Directory containing conflicts file")
-    parser.add_argument("--method", choices=['weighted', 'mult', 'min', 'max'], default='weighted', help="Combination method")
+    parser.add_argument("--method", choices=['weighted', 'mult', 'min', 'max', 'tpms'], default='tpms', help="Combination method")
     parser.add_argument("--weight-topic", type=float, default=0.5, help="Weight for topic score (for weighted method)")
     parser.add_argument("--weight-tpms", type=float, default=0.5, help="Weight for TPMS score (for weighted method)")
     args = parser.parse_args()
@@ -76,10 +76,17 @@ def main():
     tpms_scores = {}
     try:
         with open(tpms_file, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if len(row) >= 3:
-                    tpms_scores[(row[0], row[1])] = float(row[2])
+            sample = f.read(1024)
+            f.seek(0)
+            if sample.startswith('paper,reviewer'):
+                reader = csv.DictReader(f)
+                for row in reader:
+                    tpms_scores[(row['paper'], row['reviewer'])] = float(row['score'])
+            else:
+                reader = csv.reader(f)
+                for row in reader:
+                    if len(row) >= 3:
+                        tpms_scores[(row[0], row[1])] = float(row[2])
     except FileNotFoundError:
         print(f"Error: TPMS scores file not found: {tpms_file}")
         return
@@ -128,6 +135,8 @@ def main():
                     combined = min(t_score, m_score)
                 elif method == 'max':
                     combined = max(t_score, m_score)
+                elif method == 'tpms':
+                    combined = m_score
                 else:
                     combined = 0.0
             else:

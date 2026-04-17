@@ -15,8 +15,8 @@ def main():
     parser.add_argument("--demographics", default="data/from-sheets/pc-demographics.csv", help="PC demographics CSV")
     parser.add_argument("--pcinfo", default="data/from-hotcrp/asplos27-apr-pcinfo.csv", help="PC info CSV")
     parser.add_argument("--output", default="data/pc-assignments.csv", help="Output CSV file")
-    parser.add_argument("--tpms-scores", default="data/from-tpms/asplos27_scores.csv", help="TPMS scores CSV (no header)")
-    parser.add_argument("--topic-scores", default="data/paper-reviewer-topic-scores.csv", help="Topic scores CSV")
+    parser.add_argument("--tpms-scores", default="data/paper-reviewer-scaled-tpms.csv", help="TPMS scores CSV file")
+    parser.add_argument("--topic-scores", default="data/paper-reviewer-scaled-topic.csv", help="Topic scores CSV file")
     parser.add_argument("--objective", default="max_relative", choices=["max_total", "max_relative"], help="Objective function: max_total (maximize total score), max_relative (maximize fraction of optimal unconstrained score)")
     parser.add_argument("--hotcrp-output", default="data/to-hotcrp/asplos27-apr-pc-assignments.csv", help="HotCRP assignments CSV output file")
     parser.add_argument("--hotcrp-vc-output", default="data/to-hotcrp/asplos27-apr-vc-assignments.csv", help="HotCRP VC assignments CSV output file")
@@ -188,10 +188,17 @@ def main():
     try:
         print(f"Reading TPMS scores from {tpms_scores_file}")
         with open(tpms_scores_file, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if len(row) >= 3:
-                    tpms_scores_dict[(row[0], row[1])] = float(row[2])
+            sample = f.read(1024)
+            f.seek(0)
+            if sample.startswith('paper,reviewer'):
+                reader = csv.DictReader(f)
+                for row in reader:
+                    tpms_scores_dict[(row['paper'], row['reviewer'])] = float(row['score'])
+            else:
+                reader = csv.reader(f)
+                for row in reader:
+                    if len(row) >= 3:
+                        tpms_scores_dict[(row[0], row[1])] = float(row[2])
     except FileNotFoundError:
         print(f"Warning: TPMS scores file not found: {tpms_scores_file}")
 
@@ -208,12 +215,22 @@ def main():
         
     # Pre-compute all TPMS and Topic scores per paper for stats
     paper_all_tpms = collections.defaultdict(list)
-    for (p, r), score in tpms_scores_dict.items():
-        paper_all_tpms[p].append(score)
+    try:
+        with open('data/paper-reviewer-scaled-tpms.csv', 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                paper_all_tpms[row['paper']].append(float(row['score']))
+    except FileNotFoundError:
+        print("Warning: Scaled TPMS scores file not found: data/paper-reviewer-scaled-tpms.csv")
         
     paper_all_topic = collections.defaultdict(list)
-    for (p, r), score in topic_scores_dict.items():
-        paper_all_topic[p].append(score)
+    try:
+        with open('data/paper-reviewer-scaled-topic.csv', 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                paper_all_topic[row['paper']].append(float(row['score']))
+    except FileNotFoundError:
+        print("Warning: Scaled Topic scores file not found: data/paper-reviewer-scaled-topic.csv")
         
     print(f"Valid pairs: {len(valid_pairs)} (after filtering for eligible reviewers and non-zero scores)")
 
@@ -447,7 +464,7 @@ def main():
             writer = csv.writer(f)
             writer.writerow(['paper', 'actual_score', 'optimal_score', 'fraction', 'tpms_3rd', 'topic_3rd'])
             for row in stats_rows:
-                writer.writerow([row[0], f"{row[1]:.2f}", f"{row[2]:.2f}", f"{row[3]:.4f}", f"{row[4]:.2f}", f"{row[5]:.2f}"])
+                writer.writerow([row[0], f"{row[1]:.2f}", f"{row[2]:.2f}", f"{row[3]:.3f}", f"{row[4]:.3f}", f"{row[5]:.3f}"])
         
         # Write HotCRP paper tags
         tags_output_file = args.hotcrp_tags_output
