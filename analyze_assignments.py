@@ -328,6 +328,10 @@ def main():
         "Average/optimal ratios:  "
         + " ".join(f"{x:.2f}" for x in deciles_ratio)
     )
+    
+    optimal_count = sum(1 for r in ratios if r >= 0.999)
+    percent_optimal = (optimal_count / len(ratios)) * 100 if ratios else 0
+    print(f"Papers with optimal assignment: {percent_optimal:.1f}%")
     # VC Score Summary
     print("\n--- Per-Paper VC Assignment Summary (distributions, in deciles) ---")
     vc_avg_scores = []
@@ -377,6 +381,10 @@ def main():
         "Average/optimal ratios:  "
         + " ".join(f"{x:.2f}" for x in deciles_vc_ratio)
     )
+    
+    vc_optimal_count = sum(1 for r in vc_ratios if r >= 0.999)
+    vc_percent_optimal = (vc_optimal_count / len(vc_ratios)) * 100 if vc_ratios else 0
+    print(f"Papers with optimal assignment: {vc_percent_optimal:.1f}%")
 
     # --- Per Reviewer Analysis ---
     print(

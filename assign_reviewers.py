@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--hotcrp-vc-output", default="data/to-hotcrp/asplos27-apr-vc-assignments.csv", help="HotCRP VC assignments CSV output file")
     parser.add_argument("--hotcrp-pref-output", default="data/to-hotcrp/asplos27-apr-preferences.csv", help="HotCRP preferences CSV output file")
     parser.add_argument("--hotcrp-tags-output", default="data/to-hotcrp/asplos27-apr-papertags.csv", help="HotCRP paper tags CSV output file")
+    parser.add_argument("--min-relative-score", type=float, default=0.0, help="Minimum relative score fraction for each paper (e.g., 0.5)")
     args = parser.parse_args()
 
     prefix = args.prefix
@@ -298,6 +299,17 @@ def main():
         for reviewer in senior_reviewers:
             if (paper, reviewer) in x:
                 constraint.SetCoefficient(x[(paper, reviewer)], 1)
+
+    # d. Minimum quality per paper
+    if args.min_relative_score > 0:
+        print(f"Adding minimum quality constraint: fraction >= {args.min_relative_score}")
+        for paper in papers:
+            # sum(x[p,r] * scores[p,r]) >= min_relative_score * optimal_scores[p]
+            min_score = args.min_relative_score * optimal_scores[paper]
+            constraint = solver.Constraint(min_score, solver.infinity())
+            for r in reviewers:
+                if (paper, r) in x:
+                    constraint.SetCoefficient(x[(paper, r)], scores[(paper, r)])
 
     # d. Reviewer load bounds
     num_papers = len(papers)

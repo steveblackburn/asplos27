@@ -22,7 +22,7 @@ python3 analyze_scores.py
 
 echo
 echo "Step 4: Running reviewer assignment..."
-python3 assign_reviewers.py
+python3 assign_reviewers.py --min-relative-score 0.75
 
 echo
 echo "Step 5: Analyzing assignments..."
