@@ -107,7 +107,6 @@ def main():
     print(f"Writing PC scores to {output_pc_file}")
     with open(output_pc_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
-        # No header as planned
         writer.writerows(results_pc)
 
     # Write VC scores
@@ -117,7 +116,6 @@ def main():
     print(f"Writing VC scores to {output_vc_file}")
     with open(output_vc_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
-        # No header as planned
         writer.writerows(results_vc)
 
     print("Done.")

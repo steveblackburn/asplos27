@@ -1,4 +1,5 @@
 import argparse
+import collections
 import csv
 import os
 from ortools.linear_solver import pywraplp
@@ -204,6 +205,16 @@ def main():
                 topic_scores_dict[(row['paper'], row['reviewer'])] = float(row['score'])
     except FileNotFoundError:
         print(f"Warning: Topic scores file not found: {topic_scores_file}")
+        
+    # Pre-compute all TPMS and Topic scores per paper for stats
+    paper_all_tpms = collections.defaultdict(list)
+    for (p, r), score in tpms_scores_dict.items():
+        paper_all_tpms[p].append(score)
+        
+    paper_all_topic = collections.defaultdict(list)
+    for (p, r), score in topic_scores_dict.items():
+        paper_all_topic[p].append(score)
+        
     print(f"Valid pairs: {len(valid_pairs)} (after filtering for eligible reviewers and non-zero scores)")
 
     # Calculate unconstrained optimal scores for all papers
@@ -408,7 +419,14 @@ def main():
             
             fraction = actual_score / optimal_score if optimal_score > 0 else 0
             
-            stats_rows.append([paper, actual_score, optimal_score, fraction])
+            # Get 3rd best TPMS and Topic scores
+            tpms_vals = sorted(paper_all_tpms.get(paper, []), reverse=True)
+            topic_vals = sorted(paper_all_topic.get(paper, []), reverse=True)
+            
+            tpms_3rd = tpms_vals[2] if len(tpms_vals) >= 3 else 0.0
+            topic_3rd = topic_vals[2] if len(topic_vals) >= 3 else 0.0
+            
+            stats_rows.append([paper, actual_score, optimal_score, fraction, tpms_3rd, topic_3rd])
             
         # Sort by actual score ascending (worst to best)
         stats_rows.sort(key=lambda x: x[1])
@@ -427,9 +445,9 @@ def main():
         
         with open(stats_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(['paper', 'actual_score', 'optimal_score', 'fraction'])
+            writer.writerow(['paper', 'actual_score', 'optimal_score', 'fraction', 'tpms_3rd', 'topic_3rd'])
             for row in stats_rows:
-                writer.writerow([row[0], f"{row[1]:.2f}", f"{row[2]:.2f}", f"{row[3]:.4f}"])
+                writer.writerow([row[0], f"{row[1]:.2f}", f"{row[2]:.2f}", f"{row[3]:.4f}", f"{row[4]:.2f}", f"{row[5]:.2f}"])
         
         # Write HotCRP paper tags
         tags_output_file = args.hotcrp_tags_output
