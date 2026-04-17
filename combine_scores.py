@@ -6,7 +6,7 @@ def main():
     parser = argparse.ArgumentParser(description="Combine topic scores and TPMS scores.")
     parser.add_argument("--prefix", default="asplos27-apr", help="Conference prefix (e.g., asplos27-apr)")
     parser.add_argument("--topic-file", default="data/paper-reviewer-topic-scores.csv", help="Topic scores CSV file")
-    parser.add_argument("--tpms-file", default="data/from-tpms/asplos27_dryrun_scores.csv", help="TPMS scores CSV file")
+    parser.add_argument("--tpms-file", default="data/from-tpms/asplos27_scores.csv", help="TPMS scores CSV file")
     parser.add_argument("--output", default="data/paper-reviewer-combined-scores.csv", help="Output CSV file path")
     parser.add_argument("--conflicts-dir", default="data/from-hotcrp", help="Directory containing conflicts file")
     parser.add_argument("--method", choices=['weighted', 'mult', 'min', 'max'], default='weighted', help="Combination method")
@@ -43,6 +43,21 @@ def main():
         print(f"Error: Missing expected column in conflicts file: {e}")
         return
 
+    # 1.5 Read valid papers from authors file (ground truth)
+    valid_papers = set()
+    authors_file = os.path.join(conflicts_dir, f"{prefix}-authors.csv")
+    try:
+        with open(authors_file, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                valid_papers.add(row['paper'])
+    except FileNotFoundError:
+        print(f"Warning: Authors file not found: {authors_file}")
+        print("Cannot enforce ground truth for valid papers.")
+    except KeyError as e:
+        print(f"Error: Missing expected column in authors file: {e}")
+        return
+
     # 2. Read topic scores
     topic_scores = {}
     try:
@@ -69,6 +84,16 @@ def main():
         print(f"Error: TPMS scores file not found: {tpms_file}")
         return
 
+    # Warn if any paper exists in TPMS but not in topic scores
+    topic_papers = set(p for p, r in topic_scores.keys())
+    tpms_papers = set(p for p, r in tpms_scores.keys())
+    tpms_only_papers = tpms_papers - topic_papers
+    
+    if tpms_only_papers:
+        print(f"Warning: The following {len(tpms_only_papers)} papers exist in TPMS but not in topic scores (suggests withdrawal):")
+        for p in sorted(list(tpms_only_papers), key=int):
+            print(f"  {p}")
+
     # 4. Combine scores
     results = []
     
@@ -85,6 +110,8 @@ def main():
     all_pairs = set(topic_scores.keys()).union(set(tpms_scores.keys()))
 
     for paper, reviewer in sorted(list(all_pairs), key=lambda x: (int(x[0]), x[1])):
+        if valid_papers and paper not in valid_papers:
+            continue
         if (paper, reviewer) in conflicts:
             final_score = 0
         else:

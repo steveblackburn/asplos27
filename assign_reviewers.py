@@ -14,7 +14,7 @@ def main():
     parser.add_argument("--demographics", default="data/from-sheets/pc-demographics.csv", help="PC demographics CSV")
     parser.add_argument("--pcinfo", default="data/from-hotcrp/asplos27-apr-pcinfo.csv", help="PC info CSV")
     parser.add_argument("--output", default="data/pc-assignments.csv", help="Output CSV file")
-    parser.add_argument("--tpms-scores", default="data/from-tpms/asplos27_dryrun_scores.csv", help="TPMS scores CSV (no header)")
+    parser.add_argument("--tpms-scores", default="data/from-tpms/asplos27_scores.csv", help="TPMS scores CSV (no header)")
     parser.add_argument("--topic-scores", default="data/paper-reviewer-topic-scores.csv", help="Topic scores CSV")
     parser.add_argument("--objective", default="max_relative", choices=["max_total", "max_relative"], help="Objective function: max_total (maximize total score), max_relative (maximize fraction of optimal unconstrained score)")
     parser.add_argument("--hotcrp-output", default="data/to-hotcrp/asplos27-apr-pc-assignments.csv", help="HotCRP assignments CSV output file")
@@ -357,6 +357,7 @@ def main():
         with open(hotcrp_output_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(['paper', 'action', 'email', 'round'])
+            writer.writerow(['all', 'clearreview', 'all', 'RR'])
             for paper in sorted_papers:
                 for reviewer in sorted(list(reviewers)):
                     if (paper, reviewer) in x:

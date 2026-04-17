@@ -124,6 +124,8 @@ def main():
         for row in reader:
             paper = row["paper"]
             email = row["email"]
+            if paper == 'all':
+                continue
             if paper not in paper_to_reviewers:
                 paper_to_reviewers[paper] = []
             paper_to_reviewers[paper].append(email)
@@ -225,6 +227,8 @@ def main():
         for row in reader:
             paper = row["paper"]
             email = row["email"]
+            if paper == 'all':
+                continue
             if paper not in vc_paper_to_reviewers:
                 vc_paper_to_reviewers[paper] = []
             vc_paper_to_reviewers[paper].append(email)
