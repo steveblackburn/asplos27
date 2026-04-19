@@ -7,29 +7,32 @@ echo
 echo "Step 1: Generating topic scores..."
 python3 generate_topic_scores.py
 
-#echo "Step 2: Generating mock TPMS scores..."
-# Note: This generates mock data. If you have real TPMS data, 
-# you should skip this step or provide the path to real data.
-#python3 generate_mock_tpms.py
+echo
+echo "Step 2: Rescaling scores..."
+python3 rescale_scores.py
 
 echo
-echo "Step 2: Combining scores..."
+echo "Step 3: Combining scores..."
 python3 combine_scores.py
 
 echo
-echo "Step 3: Analyzing and splitting scores..."
+echo "Step 4: Analyzing and splitting scores..."
 python3 analyze_scores.py
 
 echo
-echo "Step 4: Running reviewer assignment..."
+echo "Step 5: Running reviewer assignment..."
 python3 assign_reviewers.py --min-relative-score 0.75
 
 echo
-echo "Step 5: Analyzing assignments..."
+echo "Step 6: Analyzing assignments..."
 python3 analyze_assignments.py
 
 echo
-echo "Step 6: Checking author submission limits..."
+echo "Step 7: Checking author submission limits..."
 python3 check_authors.py
+
+echo
+echo "Step 8: Analyzing topics..."
+python3 analyze_topics.py
 
 echo "All scripts executed successfully!"
