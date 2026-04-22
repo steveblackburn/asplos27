@@ -1,0 +1,9 @@
+# Ignore all files in this directory
+*
+# Except .gitignore
+!.gitignore
+# And except these subdirectories (to keep them in place)
+!from-hotcrp/
+!from-sheets/
+!from-tpms/
+!to-hotcrp/
