@@ -5,7 +5,7 @@ Scripts for processing reviewer data for the ASPLOS 2027 conference.
 ## Setup
 
 1. Clone the repository
-2. Export required csv's from HotCRP intothe `from-hotcrp` directory:
+2. Export required csv's from HotCRP into the `from-hotcrp` directory:
    - `<conference_name>-authors.csv` _(select all papers then Download Authors)_
    - `<conference_name>-pcconflicts.csv` _(select all papers then Download PC Conflicts)_
    - `<conference_name>-pcinfo.csv` _(users, Program Committee, View options, check    - `<conference_name>-topics.csv` _(select all papers then Download PC Topics)_
@@ -14,6 +14,7 @@ Scripts for processing reviewer data for the ASPLOS 2027 conference.
   - asplos27_scores.csv
 6. Add PC demographics (exported from PC Chair's spreadsheets) into the `from-sheets` directory as csv:
   - demographics.csv, with columns: first,last,email,gender,country,field,seniority
+7. Revise and modify `constraints.yml` to reflect the constraints you wish the solver to satisfy.
 
 ## Run scripts
 
