@@ -17,8 +17,8 @@ def main():
     parser = argparse.ArgumentParser(description="Filter review scores for PC and VC members.")
     parser.add_argument("--input", default="data/paper-reviewer-combined-scores.csv", help="Input CSV file")
     parser.add_argument("--pc-info", default="data/from-hotcrp/asplos27-apr-pcinfo.csv", help="PC info CSV from HotCRP")
-    parser.add_argument("--output-pc", default="data/paper-stats-pc.csv", help="Output CSV file for PC/ERC scores")
-    parser.add_argument("--output-vc", default="data/paper-stats-vc.csv", help="Output CSV file for VC scores")
+    parser.add_argument("--output-pc", default="data/analysis/paper-stats-pc.csv", help="Output CSV file for PC/ERC scores")
+    parser.add_argument("--output-vc", default="data/analysis/paper-stats-vc.csv", help="Output CSV file for VC scores")
     args = parser.parse_args()
 
     input_file = args.input

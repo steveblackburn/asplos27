@@ -9,8 +9,8 @@ def main():
     parser = argparse.ArgumentParser(description="Assign reviewers to papers using OR-Tools.")
     parser.add_argument("--prefix", default="asplos27-apr", help="Conference prefix")
     parser.add_argument("--scores", default="data/paper-reviewer-combined-scores.csv", help="Combined scores CSV")
-    parser.add_argument("--stats-file", default="data/paper-stats-pc.csv", help="PC paper stats CSV (scores list)")
-    parser.add_argument("--stats-file-vc", default="data/paper-stats-vc.csv", help="VC paper stats CSV (scores list)")
+    parser.add_argument("--stats-file", default="data/analysis/paper-stats-pc.csv", help="PC paper stats CSV (scores list)")
+    parser.add_argument("--stats-file-vc", default="data/analysis/paper-stats-vc.csv", help="VC paper stats CSV (scores list)")
     parser.add_argument("--constraints", default="constraints.yaml", help="Constraints YAML file")
     parser.add_argument("--demographics", default="data/from-sheets/pc-demographics.csv", help="PC demographics CSV")
     parser.add_argument("--pcinfo", default="data/from-hotcrp/asplos27-apr-pcinfo.csv", help="PC info CSV")
@@ -424,7 +424,7 @@ def main():
 
 
         # Write stats
-        stats_file = os.path.join(os.path.dirname(output_file), "pc-assignment-stats.csv")
+        stats_file = "data/analysis/pc-assignment-stats.csv"
         print(f"Writing assignment stats to {stats_file}")
         stats_rows = []
         for paper in sorted_papers:
@@ -597,7 +597,7 @@ def main():
         print(f"Error: VC Solver failed with status {status_vc}")
 
     # Write context file
-    context_file = os.path.join(os.path.dirname(output_file), "pc-assignment-context.csv")
+    context_file = "data/analysis/pc-assignment-context.csv"
     print(f"Writing assignment context to {context_file}")
     context_rows = []
     for paper in papers:

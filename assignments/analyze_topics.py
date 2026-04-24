@@ -8,7 +8,7 @@ def main():
     tpms_file = "data/paper-reviewer-scaled-tpms.csv"
     topic_scores_file = "data/paper-reviewer-scaled-topic.csv"
     assignments_file = "data/pc-assignments.csv"
-    output_file = "data/topic-analysis.csv"
+    output_file = "data/analysis/topic-analysis.csv"
 
     # Read assignments
     paper_to_assigned = defaultdict(list)
