@@ -43,7 +43,7 @@ python3 analyze_papers.py
 
 The `score` column in `paper-stats.csv` is a combined metric used to rank papers. It is calculated as a weighted average of two ranks:
 
-$$Score = \text{round}\left(\frac{2}{3} \times \text{rank\_overall} + \frac{1}{3} \times \text{rank\_asplos}\right)$$
+$$Score = \text{round}\left(\frac{2}{3} \times \text{rank}_{\text{overall}} + \frac{1}{3} \times \text{rank}_{\text{asplos}}\right)$$
 
 Where:
 - **`rank_overall`**: The paper's rank (on a scale of 1 to 100) based on its weighted average score for "Overall Strong ASPLOS paper" (`wavg_overall`).
