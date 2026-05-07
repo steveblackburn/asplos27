@@ -35,6 +35,34 @@ def main():
     else:
         print(f"Warning: Combined scores file not found at {combined_file}")
 
+    pcinfo_file = "../assignments/data/from-hotcrp/asplos27-apr-pcinfo.csv"
+    # Load PC info
+    reviewer_roles = {} # email -> role ('pc-full', 'erc')
+    if os.path.exists(pcinfo_file):
+        with open(pcinfo_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                email = row['email']
+                tags = row.get('tags', '')
+                if 'pc-full' in tags:
+                    reviewer_roles[email] = 'pc-full'
+                elif 'erc' in tags:
+                    reviewer_roles[email] = 'erc'
+    else:
+        print(f"Warning: PC info file not found at {pcinfo_file}")
+
+    assignments_file = "../assignments/data/to-hotcrp/asplos27-apr-pc-assignments.csv"
+    assigned_emails = set()
+    if os.path.exists(assignments_file):
+        with open(assignments_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                email = row['email']
+                if email != 'all': # Skip the clearreview row
+                    assigned_emails.add(email)
+    else:
+        print(f"Warning: Assignments file not found at {assignments_file}")
+
     # Accumulate stats and group by paper
     reviewer_stats = defaultdict(lambda: {
         'name': '',
@@ -308,6 +336,53 @@ def main():
             writer.writerow(row)
             
     print(f"Successfully wrote reviewer stats to {output_file}")
+
+    # Compute and print histograms
+    pc_counts = defaultdict(int)
+    erc_counts = defaultdict(int)
+    
+    # Get full list of reviewers (assigned or completed)
+    all_reviewers = assigned_emails.union(set(computed_stats.keys()))
+    
+    for email in all_reviewers:
+        role = reviewer_roles.get(email)
+        stats = computed_stats.get(email)
+        count = stats['reviews_count'] if stats else 0
+        
+        if role == 'pc-full':
+            pc_counts[count] += 1
+        elif role == 'erc':
+            erc_counts[count] += 1
+
+    def print_histogram(name, counts):
+        print(f"\nHistogram for {name}:")
+        if not counts:
+            print("  No data")
+            return
+            
+        N = sum(counts.values())
+        max_count = max(counts.keys()) if counts else 0
+        
+        # Calculate total missing reviews
+        total_missing = sum(freq * (max_count - i) for i, freq in counts.items())
+        
+        print(f"  {'Reviews':<12} {'Count':<14} {'Cum %':<6} {'Miss %':<8}")
+        
+        cum_rev = 0
+        cum_miss = 0
+        for i in range(max_count + 1):
+            freq = counts.get(i, 0)
+            cum_rev += freq
+            cum_miss += freq * (max_count - i)
+            
+            cum_rev_pct = int(round(cum_rev / N * 100)) if N > 0 else 0
+            cum_miss_pct = int(round(cum_miss / total_missing * 100)) if total_missing > 0 else 100
+            
+            bar = '*' * freq
+            print(f"  {i:2d} reviews:  {freq:3d} reviewers {cum_rev_pct:4d}% {cum_miss_pct:6d}%  {bar}")
+
+    print_histogram("pc-full", pc_counts)
+    print_histogram("erc", erc_counts)
 
 if __name__ == '__main__':
     main()

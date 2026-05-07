@@ -39,15 +39,38 @@ python3 analyze_papers.py
 **Outputs:**
 - `data/analysis/paper-stats.csv`
 
+### `analyze_topics.py`
+
+Analyzes review statistics by topic.
+
+**Usage:**
+Run from the `reviews/` directory:
+```bash
+python3 analyze_topics.py
+```
+
+**Inputs:**
+- `../assignments/data/from-hotcrp/asplos27-apr-topics.csv`
+- `../assignments/data/to-hotcrp/asplos27-apr-pc-assignments.csv`
+- `../assignments/data/from-tpms/asplos27_scores.csv`
+- `data/from-hotcrp/asplos27-apr-reviews.csv`
+- `data/analysis/paper-stats.csv`
+
+**Outputs:**
+- `data/analysis/topic-review-stats.csv`
+
+
 ## Score Calculation
 
-The `score` column in `paper-stats.csv` is a combined metric used to rank papers. It is calculated as a weighted average of two ranks:
+The `pct` column in `paper-stats.csv` is a combined metric used to rank papers. It is calculated as a weighted average of two percentile ranks:
 
-$$Score = \text{round}\left(\frac{2}{3} \times \text{rank}_{\text{overall}} + \frac{1}{3} \times \text{rank}_{\text{asplos}}\right)$$
+$$pct = \frac{2}{3} \times \text{rank}_{\text{overall}} + \frac{1}{3} \times \text{rank}_{\text{asplos}}$$
 
 Where:
-- **`rank_overall`**: The paper's rank (on a scale of 1 to 100) based on its weighted average score for "Overall Strong ASPLOS paper" (`wavg_overall`).
-- **`rank_asplos`**: The paper's rank (on a scale of 1 to 100) based on its weighted `wavg_asplos` score.
+- **`rank_overall`**: The paper's percentile rank (on a scale of 1 to 100) based on its weighted average score for "Overall Strong ASPLOS paper" (`wavg_overall`).
+- **`rank_asplos`**: The paper's percentile rank (on a scale of 1 to 100) based on its weighted `wavg_asplos` score.
 - **`avg_asplos`**: For each review, we take the average of the best two scores among the four advancement categories ("Advances computer architecture research", "Advances programming languages research", "Advances operating systems research", and "Introduces new area"). We then average these reviewer scores for the paper.
 
-Ranks are dense ranks scaled to a 1-100 range, where the highest score gets 100 and the lowest gets 1.
+Percentiles are computed based on the proportion of papers falling below or at a given score. To handle ties gracefully and ensure that bins are centered, we use the midpoint of the range of positions for tied scores: `midpoint = count_lt + (count_eq + 1) / 2`. This ensures that large bins or empty bins in the distribution are strictly caused by actual score ties.
+
+The final tag uploaded to HotCRP is `pctl`, which holds the integer percentile rank computed from the `pct` score.
