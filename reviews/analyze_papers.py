@@ -1,8 +1,14 @@
 import csv
 from collections import defaultdict
 import os
+import datetime
+import argparse
 
 def main():
+    parser = argparse.ArgumentParser(description='Analyze papers and compute percentiles.')
+    parser.add_argument('--base-percentiles', type=str, help='Path to base percentiles CSV file.')
+    args = parser.parse_args()
+
     combined_file = "../assignments/data/paper-reviewer-combined-scores.csv"
     reviews_file = "data/from-hotcrp/asplos27-apr-reviews.csv"
     output_file = "data/analysis/paper-stats.csv"
@@ -246,12 +252,150 @@ def main():
         stats['pct'] = pct
 
     # Compute rank based on pct
-    rank_by_pct = compute_percentiles(computed_stats, 'pct')
+    unfrozen_papers = set()
+    if args.base_percentiles:
+        print(f"Using base percentiles from {args.base_percentiles}")
+        base_percentiles = {}
+        with open(args.base_percentiles, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                base_percentiles[row['paper']] = int(row['percentile'])
+                # Subset of computed stats for frozen papers
+        frozen_stats = {p: stats for p, stats in computed_stats.items() if p in base_percentiles and stats['pct'] is not None}
+        
+        if frozen_stats:
+            # Compute percentiles among frozen papers
+            frozen_val_to_pct = compute_percentiles(frozen_stats, 'pct')
+            
+            print("\nAnalyzing movement of frozen papers:")
+            for paper, stats in frozen_stats.items():
+                pct_val = stats['pct']
+                new_rank = frozen_val_to_pct.get(pct_val)
+                base_rank = base_percentiles[paper]
+                
+                if new_rank is not None and abs(new_rank - base_rank) > 3:
+                    unfrozen_papers.add(paper)
+                    print(f"  Paper {paper}: moved from {base_rank} to {new_rank} (diff {abs(new_rank - base_rank)}). Unfreezing.")
+            
+            # Remove unfrozen papers from base_percentiles
+            for paper in unfrozen_papers:
+                del base_percentiles[paper]
+            
+            print(f"Total papers unfrozen: {len(unfrozen_papers)}")
+            
+        # Compute percentiles by interpolation
+        rank_by_pct = {}
+        
+        # Get calibration points from base file
+        calibration_points = []
+        for paper, rank in base_percentiles.items():
+            if paper in computed_stats and computed_stats[paper]['pct'] is not None:
+                calibration_points.append((computed_stats[paper]['pct'], rank))
+                
+        if not calibration_points:
+             print("Warning: No calibration points found. Falling back to standard percentiles.")
+             rank_by_pct = compute_percentiles(computed_stats, 'pct')
+        else:
+            calibration_points.sort(key=lambda x: x[0])
+            
+            # Function to interpolate
+            def interpolate(score):
+                if score < calibration_points[0][0]:
+                    s1, p1 = calibration_points[0]
+                    s2, p2 = calibration_points[1] if len(calibration_points) > 1 else (s1+1, p1)
+                    p = p1 + (p2 - p1) * (score - s1) / (s2 - s1) if s1 != s2 else p1
+                elif score > calibration_points[-1][0]:
+                    s1, p1 = calibration_points[-2] if len(calibration_points) > 1 else (calibration_points[-1][0]-1, calibration_points[-1][1])
+                    s2, p2 = calibration_points[-1]
+                    p = p1 + (p2 - p1) * (score - s1) / (s2 - s1) if s1 != s2 else p2
+                else:
+                    for i in range(len(calibration_points) - 1):
+                        s1, p1 = calibration_points[i]
+                        s2, p2 = calibration_points[i+1]
+                        if s1 <= score <= s2:
+                            if s1 == s2:
+                                p = p1
+                            else:
+                                p = p1 + (p2 - p1) * (score - s1) / (s2 - s1)
+                            break
+                return max(1, min(100, int(round(p))))
+
+                        
+            # Check for discrepancies (how well interpolation reproduces base ranks)
+            discrepancies = []
+            for paper, base_rank in base_percentiles.items():
+                if paper in computed_stats:
+                    pct_val = computed_stats[paper]['pct']
+                    if pct_val is not None:
+                        interpolated_rank = interpolate(pct_val)
+                        if interpolated_rank != base_rank:
+                            discrepancies.append((paper, base_rank, interpolated_rank))
+            
+            if discrepancies:
+                print(f"Info: {len(discrepancies)} papers would have different percentiles by interpolation than in base file.")
+                for paper, base, interp in discrepancies[:10]:
+                    print(f"  Paper {paper}: base={base}, interpolated={interp}")
+            else:
+                print("Confirmation: Interpolation perfectly reproduces all base percentiles.")
+
+            # Report for new papers with >= 3 non-VC reviews
+            new_papers = []
+            for paper, stats in computed_stats.items():
+                if stats['non_vc_reviews_count'] >= 3 and paper not in base_percentiles:
+                    pct_val = stats['pct']
+                    if pct_val is not None:
+                        final_rank = interpolate(pct_val)
+                        new_papers.append((paper, pct_val, final_rank))
+            
+            if new_papers:
+                print(f"\nReport for new papers with >= 3 non-VC reviews ({len(new_papers)} papers):")
+                print(f"{'Paper':<6} {'Score':<10} {'Percentile':<10}")
+                new_papers.sort(key=lambda x: x[1], reverse=True) # Sort by score descending
+                for paper, score, pctl in new_papers:
+                    print(f"{paper:<6} {score:<10.2f} {pctl:<10d}")
+                
+                # Histogram for new papers
+                new_ranks = [pctl for p, s, pctl in new_papers]
+                new_rank_counts = defaultdict(int)
+                for r in new_ranks:
+                    new_rank_counts[r] += 1
+                
+                print("\nHistogram of percentile scoring for new papers:")
+                if new_rank_counts:
+                    max_r = max(new_rank_counts.keys())
+                    min_r = min(new_rank_counts.keys())
+                    for r in range(min_r, max_r + 1):
+                        count = new_rank_counts.get(r, 0)
+                        if count > 0:
+                            bar = '*' * count
+                            print(f"  Rank {r:2d}: {count:3d} papers {bar}")
+                
+                # Distribution among categories
+                advance_count = sum(1 for r in new_ranks if r >= 81)
+                adjudicate_count = sum(1 for r in new_ranks if 61 <= r <= 80)
+                reject_count = sum(1 for r in new_ranks if r <= 60)
+                
+                total_new = len(new_papers)
+                print("\nDistribution among categories for new papers:")
+                print(f"  sc_advance     : {advance_count:3d} papers ({advance_count/total_new*100:.1f}%)")
+                print(f"  sc_adjudicate  : {adjudicate_count:3d} papers ({adjudicate_count/total_new*100:.1f}%)")
+                print(f"  sc_reject      : {reject_count:3d} papers ({reject_count/total_new*100:.1f}%)")
+    else:
+        rank_by_pct = compute_percentiles(computed_stats, 'pct')
 
     # Build mapping from rank to scores
     rank_to_scores = defaultdict(list)
-    for pct_val, rank in rank_by_pct.items():
-        rank_to_scores[rank].append(pct_val)
+    for paper, stats in computed_stats.items():
+        pct_val = stats['pct']
+        if pct_val is not None:
+            if args.base_percentiles:
+                final_rank = base_percentiles.get(paper)
+                if final_rank is None:
+                    final_rank = interpolate(pct_val)
+            else:
+                final_rank = rank_by_pct.get(pct_val)
+            if final_rank is not None:
+                rank_to_scores[final_rank].append(pct_val)
 
     # Write output
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -278,7 +422,14 @@ def main():
             r_overall = rank_overall.get(w_overall) if w_overall is not None else ''
             r_asplos = rank_asplos.get(w_asplos) if w_asplos is not None else ''
             
-            final_rank = rank_by_pct.get(pct, '') if pct is not None else ''
+            final_rank = ''
+            if pct is not None:
+                if args.base_percentiles:
+                    final_rank = base_percentiles.get(paper)
+                    if final_rank is None:
+                        final_rank = interpolate(pct)
+                else:
+                    final_rank = rank_by_pct.get(pct)
             
             row_data = [
                 paper,
@@ -322,10 +473,7 @@ def main():
         writer.writerow(['all', 'cleartag', 'sc_reject', ''])
         writer.writerow(['all', 'cleartag', 'sc_advance', ''])
         writer.writerow(['all', 'cleartag', 'sc_adjudicate', ''])
-        writer.writerow(['all', 'cleartag', '~~blue', ''])
-        writer.writerow(['all', 'cleartag', '~~yellow', ''])
-        writer.writerow(['all', 'cleartag', '~~gray', ''])
-        writer.writerow(['all', 'cleartag', '~~:thinking:', ''])
+        writer.writerow(['all', 'cleartag', ':thinking:', ''])
         
         for paper in sorted(computed_stats.keys(), key=int):
             stats = computed_stats[paper]
@@ -334,7 +482,14 @@ def main():
             if stats['reviews_count'] == 0:
                 continue
                 
-            final_rank = rank_by_pct.get(pct) if pct is not None else None
+            final_rank = None
+            if pct is not None:
+                if args.base_percentiles:
+                    final_rank = base_percentiles.get(paper)
+                    if final_rank is None:
+                        final_rank = interpolate(pct)
+                else:
+                    final_rank = rank_by_pct.get(pct)
             if final_rank is not None:
                 total_papers += 1
                 rank_distribution[final_rank] += 1
@@ -342,27 +497,20 @@ def main():
                 # Write pctl tag
                 writer.writerow([paper, 'tag', 'pctl', final_rank])
                 
-                # Determine bucket tag
-                if final_rank >= 81:
-                    bucket_tag = 'sc_advance'
-                elif final_rank >= 61:
-                    bucket_tag = 'sc_adjudicate'
-                else:
-                    bucket_tag = 'sc_reject'
+                # Determine bucket tag and write if at least 3 non-VC reviews
+                if stats['non_vc_reviews_count'] >= 3:
+                    if final_rank >= 81:
+                        bucket_tag = 'sc_advance'
+                    elif final_rank >= 61:
+                        bucket_tag = 'sc_adjudicate'
+                    else:
+                        bucket_tag = 'sc_reject'
                     
 
-                bucket_counts[bucket_tag] += 1
-                writer.writerow([paper, 'tag', bucket_tag, ''])
+                    bucket_counts[bucket_tag] += 1
+                    writer.writerow([paper, 'tag', bucket_tag, ''])
                 
-                # Add color tags for papers with >= 3 non-VC reviews
-                if stats['non_vc_reviews_count'] >= 3:
-                    if bucket_tag == 'sc_advance':
-                        color_tag = '~~blue'
-                    elif bucket_tag == 'sc_adjudicate':
-                        color_tag = '~~yellow'
-                    else:
-                        color_tag = '~~gray'
-                    writer.writerow([paper, 'tag', color_tag, ''])
+
                 
                 # Check for large score difference
                 overall_scores = [s for s, w in paper_stats[paper]['overall_data']]
@@ -370,7 +518,11 @@ def main():
                     max_score = max(overall_scores)
                     min_score = min(overall_scores)
                     if max_score - min_score >= 3:
-                        writer.writerow([paper, 'tag', '~~:thinking:', ''])
+                        writer.writerow([paper, 'tag', ':thinking:', ''])
+                        
+                # Tag unfrozen papers
+                if paper in unfrozen_papers:
+                    writer.writerow([paper, 'tag', '~~sc_moved', ''])
                 
     print(f"Successfully wrote paper ranks tags to {ranks_output_file}")
 
@@ -400,6 +552,24 @@ def main():
 
     print_range_histogram("Boundary 60", 55, 65, rank_distribution, rank_to_scores)
     print_range_histogram("Boundary 80", 75, 85, rank_distribution, rank_to_scores)
+
+    # Write timestamped percentiles file
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    percentiles_file = f"data/percentiles-{timestamp}.csv"
+    print(f"Writing timestamped percentiles to {percentiles_file}")
+    with open(percentiles_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['paper', 'percentile'])
+        
+        for paper in sorted(computed_stats.keys(), key=int):
+            stats = computed_stats[paper]
+            if stats['non_vc_reviews_count'] >= 3:
+                pct = stats['pct']
+                final_rank = rank_by_pct.get(pct)
+                if final_rank is not None:
+                    writer.writerow([paper, final_rank])
+                    
+    print(f"Successfully wrote timestamped percentiles to {percentiles_file}")
 
 if __name__ == '__main__':
     main()

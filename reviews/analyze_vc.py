@@ -11,6 +11,10 @@ def main():
     tpms_file = "../assignments/data/from-tpms/asplos27_scores.csv"
     reviews_file = "data/from-hotcrp/asplos27-apr-reviews.csv"
     output_file = "data/analysis/vc-stats.csv"
+    
+    vc_rr_advance_file = "data/from-hotcrp/asplos27-apr-data-vc-rr-advance.csv"
+    vc_rr_discuss_file = "data/from-hotcrp/asplos27-apr-data-vc-rr-discuss.csv"
+    vc_rr_reject_file = "data/from-hotcrp/asplos27-apr-data-vc-rr-reject.csv"
 
     # 1. Load VCs: email -> True, and store names
     vc_emails = set()
@@ -27,6 +31,20 @@ def main():
     else:
         print(f"Error: PC info file not found at {pcinfo_file}")
         return
+
+    # 1.5 Load VC Reviewer Recommendations tags
+    def load_paper_ids(file_path):
+        ids = set()
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    ids.add(row['ID'])
+        return ids
+
+    vc_rr_advance_papers = load_paper_ids(vc_rr_advance_file)
+    vc_rr_discuss_papers = load_paper_ids(vc_rr_discuss_file)
+    vc_rr_reject_papers = load_paper_ids(vc_rr_reject_file)
 
     # 2. Load VC Assignments: paper -> vc_email
     paper_to_vc = {}
@@ -130,16 +148,42 @@ def main():
         num_reject = 0
         pcls = []
         
+        num_progress = 0
+        num_advance_denom = 0
+        num_advance_num = 0
+        num_adjudicate_denom = 0
+        num_adjudicate_num = 0
+        num_reject_denom = 0
+        num_reject_num = 0
+        
         for paper in papers_assigned:
+            is_ready = paper_non_vc_counts[paper] >= 3
+            has_vc_tag = paper in vc_rr_advance_papers or paper in vc_rr_discuss_papers or paper in vc_rr_reject_papers
+            
+            if is_ready and has_vc_tag:
+                num_progress += 1
+                
             data = paper_data.get(paper)
             if data:
                 pcls.append(data['rank'])
                 if data['bucket'] == 'sc_advance':
                     num_advance += 1
+                    if has_vc_tag:
+                        num_advance_denom += 1
+                        if paper in vc_rr_advance_papers:
+                            num_advance_num += 1
                 elif data['bucket'] == 'sc_adjudicate':
                     num_adjudicate += 1
+                    if has_vc_tag:
+                        num_adjudicate_denom += 1
+                        if paper in vc_rr_advance_papers:
+                            num_adjudicate_num += 1
                 elif data['bucket'] == 'sc_reject':
                     num_reject += 1
+                    if has_vc_tag:
+                        num_reject_denom += 1
+                        if paper in vc_rr_reject_papers:
+                            num_reject_num += 1
                     
         mean_pcl = sum(pcls) / len(pcls) if pcls else None
         median_pcl = statistics.median(pcls) if pcls else None
@@ -170,12 +214,21 @@ def main():
         mean_expertise = mean(expertises)
         mean_confidence = mean(confidences)
         
+        progress_pct = (num_progress / num_papers_ready * 100) if num_papers_ready > 0 else None
+        advance_agree_pct = (num_advance_num / num_advance_denom * 100) if num_advance_denom > 0 else None
+        adjudicate_advance_pct = (num_adjudicate_num / num_adjudicate_denom * 100) if num_adjudicate_denom > 0 else None
+        reject_agree_pct = (num_reject_num / num_reject_denom * 100) if num_reject_denom > 0 else None
+
         vc_stats[vc] = {
             'num_papers': num_papers,
             'num_papers_ready': num_papers_ready,
+            'progress_pct': progress_pct,
             'num_advance': num_advance,
+            'advance_agree_pct': advance_agree_pct,
             'num_adjudicate': num_adjudicate,
+            'adjudicate_advance_pct': adjudicate_advance_pct,
             'num_reject': num_reject,
+            'reject_agree_pct': reject_agree_pct,
             'mean_pcl': mean_pcl,
             'median_pcl': median_pcl,
             'mean_tpms': mean_tpms,
@@ -188,8 +241,10 @@ def main():
     with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([
-            'vc_name', 'num_assigned_papers', 'num_papers_ready',
-            'num_sc_advance', 'num_sc_adjudicate', 'num_sc_reject', 
+            'vc_name', 'num_assigned_papers', 'num_papers_ready', 'progress_pct',
+            'num_sc_advance', 'advance_agree_pct',
+            'num_sc_adjudicate', 'adjudicate_advance_pct',
+            'num_sc_reject', 'reject_agree_pct',
             'mean_pctl', 'median_pctl', 
             'mean_reviewer_tpms', 'mean_reviewer_experience', 'mean_reviewer_confidence'
         ])
@@ -204,9 +259,13 @@ def main():
                 f"{vc_names[vc][0]} {vc_names[vc][1]}",
                 stats['num_papers'],
                 stats['num_papers_ready'],
+                fmt(stats['progress_pct']),
                 stats['num_advance'],
+                fmt(stats['advance_agree_pct']),
                 stats['num_adjudicate'],
+                fmt(stats['adjudicate_advance_pct']),
                 stats['num_reject'],
+                fmt(stats['reject_agree_pct']),
                 fmt(stats['mean_pcl']),
                 fmt(stats['median_pcl']),
                 fmt(stats['mean_tpms']),
@@ -214,6 +273,20 @@ def main():
                 fmt(stats['mean_confidence'])
             ])
             
+    total_vc_papers = len(paper_to_vc)
+    total_tagged_papers = len(vc_rr_advance_papers | vc_rr_discuss_papers | vc_rr_reject_papers)
+    
+    def print_tag_summary(name, paper_set):
+        count = len(paper_set)
+        pct_all = (count / total_vc_papers * 100) if total_vc_papers > 0 else 0
+        pct_tagged = (count / total_tagged_papers * 100) if total_tagged_papers > 0 else 0
+        print(f"  {name:<15}: {count:3d} papers ({pct_all:.1f}% of all, {pct_tagged:.1f}% of tagged)")
+        
+    print("\nVC Recommendation Summary:")
+    print_tag_summary("#vc_rr_advance", vc_rr_advance_papers)
+    print_tag_summary("#vc_rr_discuss", vc_rr_discuss_papers)
+    print_tag_summary("#vc_rr_reject", vc_rr_reject_papers)
+
     print(f"Successfully wrote VC stats to {output_file}")
 
 if __name__ == '__main__':
